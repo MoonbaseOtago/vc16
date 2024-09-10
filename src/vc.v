@@ -175,7 +175,7 @@ module vc(input clk, input reset,
 	wire		flush_write;
 	wire		do_flush_write;
 	wire		do_inv_mmu;
-	wire idone =ifetch&i_hit;
+	wire idone =ifetch&i_hit&!mmu_fault;
 	wire		user_io;
 
 	decode #(.RV(RV))dec(.clk(clk), .reset(reset),

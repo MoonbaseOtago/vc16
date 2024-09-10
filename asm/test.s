@@ -855,7 +855,8 @@ int2:	mv	a0, a3
 	ldio	a0, 0(a4)
 	jal	sendx		// 8
 	ldio	a0, 2(a4)
-	jal	sendx		// 9
+	and	a0, 0x19
+	jal	sendx		// 9  --
 	ldio	a0, 4(a4)
 	jal	sendx		// 8
 	stio    a2, 10(a4)	
