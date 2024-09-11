@@ -105,6 +105,7 @@ module spi(input clk, input reset,
 		r_cs <= 3'b111;
 		r_ready <= 1;
 		r_interrupt <= 0;
+		r_bits <= 7;
 	end else
 	case (r_state)
 	0:	begin
