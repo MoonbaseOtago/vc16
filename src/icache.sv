@@ -72,13 +72,13 @@ module icache(input clk, input reset,
 				for (N = 0; N < LINE_LENGTH*2; N=N+1) begin
 					always_latch
 					if (~clk && pindex == L && wstrobe_d && (r_offset) == (N^1)) begin
-						r_data[L][N*4+3:N*4] = dread;
+						r_data[L][N*4+3:N*4] <= dread;
 					end
 				end
 	
 				always_latch
 				if (~clk && pindex == L && wstrobe_d && r_offset == (LINE_LENGTH*2-1))
-					r_tag[L] = ptag;
+					r_tag[L] <= ptag;
 
 			end else begin
 
