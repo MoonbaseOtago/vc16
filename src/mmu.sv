@@ -118,12 +118,13 @@ module mmu(input clk,  input reset, input is_pc, input is_write, input is_read, 
 	generate
 		if (USE_LATCHES_FOR_MMU) begin
 			always_latch
-			if (~clk && reg_write && reg_data[0]) begin
-				if (r_fault_ins) begin
-					r_vtop_i[reg_addr] <= reg_data[RV-1:RV-(PA-UNTOUCHED)];
-				end else begin
-					r_vtop_d[reg_addr] <= reg_data[RV-1:RV-(PA-UNTOUCHED)];
-					r_writeable_d[reg_addr] <= reg_data[2];
+			if (~clk && reg_write && reg_data[0] && r_fault_ins) 
+				r_vtop_i[reg_addr] = reg_data[RV-1:RV-(PA-UNTOUCHED)];
+
+			always_latch
+			if (~clk && reg_write && reg_data[0] && !r_fault_ins) begin
+					r_vtop_d[reg_addr] = reg_data[RV-1:RV-(PA-UNTOUCHED)];
+					r_writeable_d[reg_addr] = reg_data[2];
 				end
 			end 
 		end else begin
