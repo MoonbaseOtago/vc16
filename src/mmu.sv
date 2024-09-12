@@ -60,7 +60,7 @@ module mmu(input clk,  input reset, input is_pc, input is_write, input is_read, 
 
 	reg [2*NMMU-1:0]r_valid_i;
 	reg [2*NMMU-1:0]r_valid_d;
-	reg [2*NMMU-1:0]r_writeable_d;
+	reg             r_writeable_d[0:2*NMMU-1];
 	wire [$clog2(NMMU):0]sel_i = {supmode, pcv[VA-1:UNTOUCHED]};
 	wire [$clog2(NMMU):0]sel_d = {supmode&~(mmu_d_proxy&~is_pc), addrv[VA-1:UNTOUCHED]};
 
@@ -117,16 +117,20 @@ module mmu(input clk,  input reset, input is_pc, input is_write, input is_read, 
 
 	generate
 		if (USE_LATCHES_FOR_MMU) begin
-			always_latch
-			if (~clk && reg_write && reg_data[0] && r_fault_ins) 
-				r_vtop_i[reg_addr] = reg_data[RV-1:RV-(PA-UNTOUCHED)];
+			genvar I;
 
-			always_latch
-			if (~clk && reg_write && reg_data[0] && !r_fault_ins) begin
-					r_vtop_d[reg_addr] = reg_data[RV-1:RV-(PA-UNTOUCHED)];
-					r_writeable_d[reg_addr] = reg_data[2];
+			for (I = 0; I < (2*NMMU); I=I+1) begin
+				always_latch
+				if (~clk && reg_write && reg_data[0] && r_fault_ins && reg_addr==I) 
+					r_vtop_i[I] = reg_data[RV-1:RV-(PA-UNTOUCHED)];
+	
+				always_latch
+				if (~clk && reg_write && reg_data[0] && !r_fault_ins && reg_addr==I) begin
+					r_vtop_d[I] = reg_data[RV-1:RV-(PA-UNTOUCHED)];
+					r_writeable_d[I] = reg_data[2];
 				end
-			end 
+			end
+
 		end else begin
 			always @(posedge clk)
 			if (reg_write) begin
