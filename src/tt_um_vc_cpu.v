@@ -18,12 +18,16 @@ module tt_um_vc32_cpu (
 	parameter NMMU=16;
 	parameter I_NLINES=16;  // number of lines   
 	parameter D_NLINES=8;  // number of lines
+	parameter USE_LATCHES_FOR_MMU=1;
+	parameter USE_LATCHES_FOR_ICACHE=1;
+	parameter USE_LATCHES_FOR_DCACHE=1;
 	
 	reg r_reset;
 	always @(posedge clk)
 		r_reset <= ~rst_n;
 
-	vc   #(.RV(RV), .VA(VA), .PA(PA), .MMU(MMU), .NMMU(NMMU), .I_NLINES(I_NLINES), .D_NLINES(D_NLINES))cpu(.clk(clk), .reset(r_reset|!ena), 
+	vc   #(.RV(RV), .VA(VA), .PA(PA), .MMU(MMU), .NMMU(NMMU), .I_NLINES(I_NLINES), .D_NLINES(D_NLINES),
+.USE_LATCHES_FOR_MMU(USE_LATCHES_FOR_MMU), .USE_LATCHES_FOR_ICACHE(USE_LATCHES_FOR_ICACHE), .USE_LATCHES_FOR_DCACHE(USE_LATCHES_FOR_DCACHE))cpu(.clk(clk), .reset(r_reset|!ena), 
 			.ui_in      (ui_in),    // Dedicated inputs
         		.uo_out     (uo_out),   // Dedicated outputs
         		.uio_in     (uio_in),   // IOs: Input path

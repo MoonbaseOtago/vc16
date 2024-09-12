@@ -21,6 +21,7 @@ module mmu(input clk,  input reset, input is_pc, input is_write, input is_read, 
 	parameter PA=RV;
 	parameter VA=RV;
 	parameter NMMU=8;
+	parameter USE_LATCHES_FOR_MMU=1;
 
 	parameter UNTOUCHED = VA-$clog2(NMMU);
 	reg [VA-1: UNTOUCHED]r_fault_address;
@@ -102,12 +103,9 @@ module mmu(input clk,  input reset, input is_pc, input is_write, input is_read, 
 	if (reg_write) begin
 		if (reg_data[0]) begin
 			if (r_fault_ins) begin
-				r_vtop_i[reg_addr] <= reg_data[RV-1:RV-(PA-UNTOUCHED)];
 				r_valid_i[reg_addr] <= reg_data[1];
 			end else begin
-				r_vtop_d[reg_addr] <= reg_data[RV-1:RV-(PA-UNTOUCHED)];
 				r_valid_d[reg_addr] <= reg_data[1];
-				r_writeable_d[reg_addr] <= reg_data[2];
 			end
 		end else begin
 			r_fault_address <= reg_data[VA-1:UNTOUCHED];
@@ -116,6 +114,34 @@ module mmu(input clk,  input reset, input is_pc, input is_write, input is_read, 
 			r_fault_ins <= reg_data[3];
 		end
 	end 
+
+	generate
+		if (USE_LATCHES_FOR_MMU) begin
+			always @(*)
+			if (!clk && reg_write) begin
+				if (reg_data[0]) begin
+					if (r_fault_ins) begin
+						r_vtop_i[reg_addr] = reg_data[RV-1:RV-(PA-UNTOUCHED)];
+					end else begin
+						r_vtop_d[reg_addr] = reg_data[RV-1:RV-(PA-UNTOUCHED)];
+						r_writeable_d[reg_addr] = reg_data[2];
+					end
+				end
+			end 
+		end else begin
+			always @(posedge clk)
+			if (reg_write) begin
+				if (reg_data[0]) begin
+					if (r_fault_ins) begin
+						r_vtop_i[reg_addr] <= reg_data[RV-1:RV-(PA-UNTOUCHED)];
+					end else begin
+						r_vtop_d[reg_addr] <= reg_data[RV-1:RV-(PA-UNTOUCHED)];
+						r_writeable_d[reg_addr] <= reg_data[2];
+					end
+				end
+			end 
+		end
+	endgenerate
 endmodule
 
 /* For Emacs:

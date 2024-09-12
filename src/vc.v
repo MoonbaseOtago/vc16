@@ -89,6 +89,9 @@ module vc(input clk, input reset,
 	parameter LINE_LENGTH=4;  // cache line length (in bytes)
 	parameter I_NLINES=16;  // number of lines
 	parameter D_NLINES=8;  // number of lines
+	parameter USE_LATCHES_FOR_MMU=1;
+	parameter USE_LATCHES_FOR_ICACHE=1;
+	parameter USE_LATCHES_FOR_DCACHE=1;
 
 	assign uo_out[2] = clk;
 
@@ -115,7 +118,7 @@ module vc(input clk, input reset,
 			assign phys_pc = pc[VA-1:RV/16];
 			assign mmu_read = 'bx;
 		end else begin
-			mmu   #(.VA(VA), .PA(PA), .RV(RV), .NMMU(NMMU))mmu(.clk(clk), .reset(reset), .supmode(supmode),
+			mmu   #(.VA(VA), .PA(PA), .RV(RV), .NMMU(NMMU), .USE_LATCHES_FOR_MMU(USE_LATCHES_FOR_MMU))mmu(.clk(clk), .reset(reset), .supmode(supmode),
 						.mmu_enable(mmu_enable),
 						.mmu_d_proxy(mmu_d_proxy),
 						.inv_mmu(inv_mmu),
@@ -273,7 +276,7 @@ module vc(input clk, input reset,
 	assign wdone =  |wmask &&   ((io_access ? io_wdone : ((d_hit && (!(d_pull|d_push)))|d_wdone) || (!d_push&&flush_write)) || fault);
 
 
-	icache #(.PA(PA), .LINE_LENGTH(LINE_LENGTH), .RV(RV), .NLINES(I_NLINES))icache(.clk(clk), .reset(reset),
+	icache #(.PA(PA), .LINE_LENGTH(LINE_LENGTH), .RV(RV), .NLINES(I_NLINES), .USE_LATCHES_FOR_ICACHE(USE_LATCHES_FOR_ICACHE))icache(.clk(clk), .reset(reset),
 		.paddr(phys_pc[PA-1:1]),
 
 		.dread(uio_in[3:0]),	
@@ -286,7 +289,7 @@ module vc(input clk, input reset,
 		.tag(i_tag),
 		.rdata(ins));
 
-	dcache #(.PA(PA), .LINE_LENGTH(LINE_LENGTH), .RV(RV), .NLINES(D_NLINES))dcache(.clk(clk), .reset(reset),
+	dcache #(.PA(PA), .LINE_LENGTH(LINE_LENGTH), .RV(RV), .NLINES(D_NLINES), .USE_LATCHES_FOR_DCACHE(USE_LATCHES_FOR_DCACHE))dcache(.clk(clk), .reset(reset),
 		.paddr(phys_addr),
 		.read(io_access ? 2'b00: rstrobe ),
 		.write(io_access ? 2'b00: wmask),

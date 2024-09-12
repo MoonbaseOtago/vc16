@@ -20,6 +20,7 @@ module icache(input clk, input reset,
 	parameter NLINES=4;  // cache line length (in bytes)
 	parameter RV=16;
 	parameter PA=22;
+	parameter USE_LATCHES_FOR_ICACHE=1;
 
 	generate
 		reg [LINE_LENGTH*8-1:0]r_data[0:NLINES-1];
@@ -60,22 +61,39 @@ module icache(input clk, input reset,
 
 		for (L = 0; L < NLINES; L=L+1) begin
 			always @(posedge clk)
-			if (pindex == L && wstrobe_d && r_offset == (LINE_LENGTH*2-1))
-				r_tag[L] <= ptag;
-
-			always @(posedge clk)
 			if (reset || flush_all) begin
 				r_valid[L] <= 0;
 			end else
 			if (wstrobe_d && (r_offset == (LINE_LENGTH*2-1)) && pindex == L)
 				r_valid[L] <= 1;
 
-			for (N = 0; N < LINE_LENGTH*2; N=N+1) begin
-				always @(posedge clk)
-				if (pindex == L) 
-				if (wstrobe_d && (r_offset) == (N^1)) begin
-					r_data[L][N*4+3:N*4] <= dread;
+			if (USE_LATCHES_FOR_ICACHE) begin
+
+				for (N = 0; N < LINE_LENGTH*2; N=N+1) begin
+					always @(*)
+					if (~clk && pindex == L && wstrobe_d && (r_offset) == (N^1)) begin
+						r_data[L][N*4+3:N*4] = dread;
+					end
 				end
+	
+				always @(*)
+				if (~clk && pindex == L && wstrobe_d && r_offset == (LINE_LENGTH*2-1))
+					r_tag[L] = ptag;
+
+			end else begin
+
+				for (N = 0; N < LINE_LENGTH*2; N=N+1) begin
+					always @(posedge clk)
+					if (pindex == L) 
+					if (wstrobe_d && (r_offset) == (N^1)) begin
+						r_data[L][N*4+3:N*4] <= dread;
+					end
+				end
+	
+				always @(posedge clk)
+				if (pindex == L && wstrobe_d && r_offset == (LINE_LENGTH*2-1))
+					r_tag[L] <= ptag;
+
 			end
 		end
 

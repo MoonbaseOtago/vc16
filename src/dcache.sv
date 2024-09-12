@@ -28,6 +28,7 @@ module dcache(input clk, input reset,
 	parameter NLINES=4;  // cache line length (in bytes)
 	parameter RV=16;
 	parameter PA=22;
+	parameter USE_LATCHES_FOR_DCACHE=0;
 
 	generate
 		reg [LINE_LENGTH*8-1:0]r_data[0:NLINES-1];
