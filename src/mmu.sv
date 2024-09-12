@@ -117,7 +117,7 @@ module mmu(input clk,  input reset, input is_pc, input is_write, input is_read, 
 
 	generate
 		if (USE_LATCHES_FOR_MMU) begin
-			always @(*)
+			always_latch
 			if (!clk && reg_write) begin
 				if (reg_data[0]) begin
 					if (r_fault_ins) begin
