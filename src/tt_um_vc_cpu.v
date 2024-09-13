@@ -18,9 +18,9 @@ module tt_um_vc32_cpu (
 	parameter NMMU=16;
 	parameter I_NLINES=8;  // number of lines   
 	parameter D_NLINES=8;  // number of lines
-	parameter USE_LATCHES_FOR_MMU=1;
-	parameter USE_LATCHES_FOR_ICACHE=1;
-	parameter USE_LATCHES_FOR_DCACHE=1;
+	parameter USE_LATCHES_FOR_MMU=0;
+	parameter USE_LATCHES_FOR_ICACHE=0;
+	parameter USE_LATCHES_FOR_DCACHE=0;
 	
 	reg r_reset;
 	always @(posedge clk)
