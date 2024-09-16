@@ -115,7 +115,7 @@ module execute(input clk, input reset,
 		if (VA < RV) begin
 
 			always @(*) 
-			if (br) begin
+			if (br && (!cond[2] || rs1==0 || (sys_trap||interrupt&r_ie))) begin
 				r1 = {{(RV-VA){1'b0}}, r_pc, sys_trap||interrupt&r_ie?sup_enabled:1'b0};
 			end else begin
 				r1 = r1reg;
@@ -124,7 +124,7 @@ module execute(input clk, input reset,
 		end else begin
 
 			always @(*) 
-			if (br) begin
+			if (br && (!cond[2] || rs1==0 || (sys_trap||interrupt&r_ie))) begin
 				r1 = {r_pc, sys_trap||interrupt&r_ie?sup_enabled:1'b0};
 			end else begin
 				r1 = r1reg;

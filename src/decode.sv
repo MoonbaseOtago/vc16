@@ -136,6 +136,14 @@ module decode(input clk, input reset,
 							c_imm = {{(RV-5){1'b0}},         ins[11:10],ins[6], ins[12], ins[5]};
 						end
 					end
+			3'b100:	begin	// jal   x(li)
+						c_br = 1;
+						c_cond = 3'b1x1;
+						c_op = `OP_ADD;
+						c_imm = {{(RV-11){ins[12]}}, ins[8], ins[10:9], ins[6],ins[7],ins[2],ins[11],ins[5:3],1'b0};			
+						c_rd = 1;
+						c_rs1 = 1;
+					end
 			3'b110: begin 	// sw
 						c_store = 1;
 						c_cond = 3'bxx0;
@@ -175,6 +183,7 @@ module decode(input clk, input reset,
 						c_op = `OP_ADD;
 						c_imm = {{(RV-11){ins[12]}}, ins[8], ins[10:9], ins[6],ins[7],ins[2],ins[11],ins[5:3],1'b0};			
 						c_rd = 1;
+						c_rs1 = 0;
 					end
 			3'b010:	begin	// li
 						c_op = `OP_ADD;
@@ -193,9 +202,10 @@ module decode(input clk, input reset,
 						end
 					end else begin				// lui **
 						c_op = `OP_ADD;
-						c_rd = {1'b1, ins[9:7]};
+						c_rd = ins[10:7];
 						c_rs1 = 0;
 						c_imm = {{(RV-14){ins[11]}}, ins[12], ins[6:2],8'b0};
+						c_trap = !supmode && (c_rd >= 4'b0011 && c_rd <= 4'b0110);
 					end
 			3'b100:	begin
 						c_rd = {1'b1, ins[9:7]};
@@ -223,6 +233,7 @@ module decode(input clk, input reset,
 						c_cond = 3'b1x0;
 						c_op = `OP_ADD;
 						c_imm = {{(RV-11){ins[12]}}, ins[8], ins[10:9], ins[6],ins[7],ins[2],ins[11],ins[5:3],1'b0};
+						c_rs1 = 0;
 					end
 			3'b11?:	begin	//  beqz/bnez
 						c_br = 1;
@@ -392,9 +403,10 @@ module decode(input clk, input reset,
 			3'b011:
 					begin				// lui ** - note inverted extension
 						c_op = `OP_ADD;
-						c_rd = {1'b1, ins[9:7]};
+						c_rd = ins[10:7];	// allows li
 						c_rs1 = 0;
 						c_imm = {{(RV-15){~ins[11]}}, ins[11],  ins[12], ins[6:2],8'b0};
+						c_trap = !supmode && (c_rd >= 4'b0011 && c_rd <= 4'b0110);
 					end
 			3'b100:	begin
 						c_rd = {1'b1, ins[9:7]};

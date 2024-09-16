@@ -189,7 +189,7 @@ module qspi(input clk, input reset,
 			17:begin
 					c_state = 18;
 					if (r_mask[mem]) begin
-						c_uio_out = 0;
+						c_uio_out = 4'hf;
 					end else begin
 						c_uio_oe = 2'b00;
 					end

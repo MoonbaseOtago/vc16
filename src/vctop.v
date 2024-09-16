@@ -14,11 +14,11 @@ module vcxx (
 	parameter D_NLINES=64;  // number of lines
 
 	wire clk_out;
-	clk_wiz_0 clks(.clk_in1(clk), .reset(~rst_n), .clk_out1(clk_out));
+	clk_wiz_0 clks(.clk_in1(clk), .reset(rst_n), .clk_out1(clk_out));
 
 	wire [7:0]uio_out;
 	wire [7:0]uio_oe;
-	tt_um_vc32_cpu   #(.I_NLINES(I_NLINES), .D_NLINES(D_NLINES))tt_um_vc32_cpu(.clk(clk_out), .rst_n(rst_n), .ena(1'b1),
+	tt_um_vc32_cpu   #(.I_NLINES(I_NLINES), .D_NLINES(D_NLINES))tt_um_vc32_cpu(.clk(clk_out), .rst_n(~rst_n), .ena(1'b1),
 			.ui_in      (ui_in),    // Dedicated inputs
         		.uo_out     (uo_out),   // Dedicated outputs
         		.uio_in     (uio_io),   // IOs: Input path

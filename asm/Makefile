@@ -9,6 +9,9 @@ vc.tab.c: vc.y
 test:	vcasm test.s
 	./vcasm -s -m -o ../test/init.v test.s
 
+init.bin:	vcasm init.s
+	./vcasm -b -m -o init.bin init.s
+
 ld:	ld.c	
 	gcc -I /home/paul/tt06/vc32/bsd/usr/include -I /home/paul/tt06/vc32/bsd/usr//sys -I /home/paul/tt06/vc32/bsd/usr//sys/h  -o ld ld.c -g
 

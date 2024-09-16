@@ -100,7 +100,7 @@ ins:		t_and  rm ',' rm 	{ $$ = 0x8c61|($2<<7)|($4<<2); }
 	|	t_sb r ',' '(' rm ')'	{ $$ = 0xe000|($5<<7)|roff(0)|(($2&7)<<2); chkr($2); }
 	|	t_lea rm ',' exp '(' t_sp ')' { $$ = 0x0000 | ($2<<2) | zoffX($4); }
 	|	t_lea rm ',' '(' t_sp ')'{ $$ = 0x0000 | ($2<<2) | zoffX(0); }
-	|	t_lui    rm ',' exp	{ $$ = 0x6001 | ((8|$2)<<7) | luioff($4,0); }	
+	|	t_lui    r ',' exp	{ $$ = 0x6001 | (($2)<<7) | luioff($4,0); }	
 	|	t_li     rm ',' exp	{ if (simple_li($4)) { $$ = 0x4001 | ($2<<7) | lioff($4); } else
 						{
 							int delta = $4;
@@ -125,6 +125,7 @@ ins:		t_and  rm ',' rm 	{ $$ = 0x8c61|($2<<7)|($4<<2); }
 	|	t_bgez	rm ',' t_num_label { $$ = 0xc003 | ($2<<7) | ref_label($4, 7, 0); }
 	|	t_j	t_name		{ $$ = 0xa001; ref_label($2, 2, 0); }
 	|	t_jal	t_name		{ $$ = 0x2001; ref_label($2, 2, 0); }
+	|	t_jal	t_name '(' t_li ')'{ $$ = 0x8000; ref_label($2, 9, 0); }
 	|	t_j	t_num_label	{ $$ = 0xa001| ref_label($2, 6, 0); }
 	|	t_jal	t_num_label	{ $$ = 0x2001| ref_label($2, 6, 0); }
 	|	t_sll	rm ',' rm	{ $$ = 0x1002 | ($2<<7) | ($4<<2); }
