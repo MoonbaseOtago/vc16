@@ -894,7 +894,7 @@ int3:	mv	a0, a3
 	ldio	a0, 0(a4)
 	jal     sendx           // 4
 	mv	a0, a1	
-	jal     sendx           // 228
+	jal     sendx           // 228 sometimes 229
 
 	li	a2, 0		// disable interrupts
 	stio    a2, 4(a4)
