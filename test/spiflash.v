@@ -49,7 +49,7 @@ module spiflash #(
 );
   localparam verbose = 0;
   localparam integer rom_latency = 4;  
-  localparam integer ram_latency = 3;  
+  localparam integer ram_latency = 2;  
 
   reg rom;
 

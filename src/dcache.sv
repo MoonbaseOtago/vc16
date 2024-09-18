@@ -117,7 +117,7 @@ wire [LINE_LENGTH*8-1:0]r0=r_data['h19];
 
 			always @(posedge clk)
 			if (pindex == L)
-			if (|write && hit && !fault && (!pull && !push)) begin
+			if (|write && hit && !flush_write && !fault && (!pull && !push)) begin
 				r_dirty[L] <= 1;
 			end else
 			if (r_offset == (LINE_LENGTH*2-1)) begin

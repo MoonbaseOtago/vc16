@@ -54,9 +54,9 @@ module qspi(input clk, input reset,
 
 		always @(posedge clk)
 		if (reset) begin
-			r_read_delay[0] <= 5;	// 6 clocks for RAM 
+			r_read_delay[0] <= 4;	// 5 clocks for RAM 
 			r_read_delay[1] <= 4;	// 5 clocks for ROM
-			r_read_delay[2] <= 5;	// 6 clocks for RAM 
+			r_read_delay[2] <= 4;	// 5 clocks for RAM 
 			r_mask <= 3'b010;
 			r_quad <= 3'b101;
 			r_rom_mode <= 2'b11;
