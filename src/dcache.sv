@@ -32,7 +32,7 @@ module dcache(input clk, input reset,
 
 	generate
 		reg [LINE_LENGTH*8-1:0]r_data[0:NLINES-1];
-wire [LINE_LENGTH*8-1:0]r0=r_data['h19];
+//wire [LINE_LENGTH*8-1:0]r0=r_data['h19];
 //wire [LINE_LENGTH*8-1:0]r1=r_data[1];
 //wire [LINE_LENGTH*8-1:0]r3=r_data[3];
 		reg [PA-1:$clog2(LINE_LENGTH*NLINES)]r_tag[0:NLINES-1];
