@@ -45,6 +45,9 @@ include $(shell cocotb-config --makefiles)/Makefile.sim
 init.hex: ../asm/test.s ../asm/vcasm
 	../asm/vcasm -m ../asm/test.s -h -o init.hex
 
+init2.hex: ../asm/init.s ../asm/vcasm
+	../asm/vcasm -m ../asm/init.s -h -o init.hex
+
 ../asm/vcasm:	../asm/main.c ../asm/vc.y
 	cd ../asm;make vcasm
 	

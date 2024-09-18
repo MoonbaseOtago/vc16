@@ -32,6 +32,7 @@ module tb ();
 
     wire [3:0]b;
 
+    //tt_um_vc32_cpu #(.I_NLINES(64), .D_NLINES(64))tt_um_vc32_cpu (
     tt_um_vc32_cpu tt_um_vc32_cpu (
     // include power ports for the Gate Level test
     `ifdef GL_TEST

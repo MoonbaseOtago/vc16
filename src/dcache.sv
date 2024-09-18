@@ -32,7 +32,7 @@ module dcache(input clk, input reset,
 
 	generate
 		reg [LINE_LENGTH*8-1:0]r_data[0:NLINES-1];
-//wire [LINE_LENGTH*8-1:0]r0=r_data[0];
+wire [LINE_LENGTH*8-1:0]r0=r_data['h19];
 //wire [LINE_LENGTH*8-1:0]r1=r_data[1];
 //wire [LINE_LENGTH*8-1:0]r3=r_data[3];
 		reg [PA-1:$clog2(LINE_LENGTH*NLINES)]r_tag[0:NLINES-1];
@@ -130,7 +130,7 @@ module dcache(input clk, input reset,
 
 			for (N = 0; N < LINE_LENGTH*2; N=N+1) begin
 				always @(posedge clk)
-				if (|write && pindex == L && !fault && ((hit && (!pull || !push)) || (wstrobe_d && r_offset == (2*LINE_LENGTH-1))) && (write != 2'b11 ? {paddr[1], write[1]} == N[2:1] : paddr[1] == N[2])) begin
+				if (|write && !flush_write &&  pindex == L && !fault && ((hit && (!pull || !push)) || (wstrobe_d && r_offset == (2*LINE_LENGTH-1))) && (write != 2'b11 ? {paddr[1], write[1]} == N[2:1] : paddr[1] == N[2])) begin
 					casez ({write, N[1:0]}) // synthesis full_case parallel_case
 					4'b01_?0: r_data[L][N*4+3:N*4] <= wdata[3:0];
 					4'b10_?0: r_data[L][N*4+3:N*4] <= wdata[3:0];
