@@ -16,7 +16,7 @@ module tt_um_vc32_cpu (
 	parameter PA=24;
 	parameter MMU=1;
 	parameter NMMU=16;
-	parameter I_NLINES=8;  // number of lines   
+	parameter I_NLINES=16;  // number of lines   
 	parameter D_NLINES=8;  // number of lines
 	parameter USE_LATCHES_FOR_MMU=0;
 	parameter USE_LATCHES_FOR_ICACHE=0;
