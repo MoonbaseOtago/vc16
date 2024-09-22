@@ -93,7 +93,11 @@ module vc(input clk, input reset,
 	parameter USE_LATCHES_FOR_ICACHE=1;
 	parameter USE_LATCHES_FOR_DCACHE=1;
 
-	assign uo_out[2] = ~clk;
+	reg			r_clk_invert;
+	always @(posedge clk)
+	if (reset)
+		r_clk_invert <= ~ui_in[7];
+	assign uo_out[2] = r_clk_invert^clk;
 
 	wire [ 1:0]rstrobe;
 	wire [(RV/8)-1:0]wmask;
