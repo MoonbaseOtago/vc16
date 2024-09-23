@@ -385,9 +385,12 @@ module execute(input clk, input reset,
 		r_mult <= c_mult;
 	end
 `endif
+
+	reg r_wb_swapsp;
 	
 	always @(posedge clk)
-	if (!reset && ((valid && !((br|jmp)&!link) && !r_read_stall && !mult_stall) || mdone || (mmu_fault&r_fetch))) begin
+	if (!reset && ((valid && !(swapsp && prev_supmode) && !((br|jmp)&!link) && !r_read_stall && !mult_stall) || mdone || (mmu_fault&r_fetch))) begin
+		r_wb_swapsp <= swapsp;
 		r_wb_valid <= !(load&!r_read_stall || store);
 		r_wb_addr <= (reset ?0 : (sys_trap||(interrupt&r_ie)||(mmu_fault&r_fetch)) ? 3 : store? 0 : rd);
 		r_wb <= sys_trap||(interrupt&r_ie)||(mmu_fault&r_fetch)?{r_pc, supmode}: link ? {pc_plus_1, supmode}: c_wb;
@@ -406,7 +409,7 @@ module execute(input clk, input reset,
 	4'b0001:	r_lr <= r_wb[RV-1:1];
 	4'b0010:	begin
 					r_sp <= r_wb[RV-1:1];
-					if (swapsp) r_stmp <= {r_sp, 1'b0};
+					if (r_wb_swapsp) r_stmp <= {r_sp, 1'b0};
 				end
 	4'b0011:	if (sup_enabled) r_epc <= r_wb[RV-1:1];
 	//4'b0100: csr regs (not readable)
