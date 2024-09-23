@@ -31,13 +31,15 @@ module tb ();
     wire [7:0] uio_oe;
 
     wire [3:0]b;
+    wire VPWR=1;
+    wire VGND=0;
 
     //tt_um_vc32_cpu #(.I_NLINES(64), .D_NLINES(64))tt_um_vc32_cpu (
     tt_um_vc32_cpu tt_um_vc32_cpu (
     // include power ports for the Gate Level test
     `ifdef GL_TEST
-        .VPWR( 1'b1),
-        .VGND( 1'b0),
+        .VPWR(VPWR),
+        .VGND(VGND),
     `endif
         .ui_in      (ui_in),    // Dedicated inputs
         .uo_out     (uo_out),   // Dedicated outputs
