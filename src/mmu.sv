@@ -107,6 +107,7 @@ module mmu(input clk,  input reset, input is_pc, input is_write, input is_read, 
 			end else begin
 				r_valid_d[reg_addr] <= reg_data[1];
 			end
+			r_fault_address <= r_fault_address+1;
 		end else begin
 			r_fault_address <= reg_data[VA-1:UNTOUCHED];
 			r_fault_type <= reg_data[1];
