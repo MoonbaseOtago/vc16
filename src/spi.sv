@@ -163,8 +163,6 @@ module spi(input clk, input reset,
 				end
 				r_bits <= r_bits - 1;
 				if (r_bits == 0) begin
-					r_ready <= 1;
-					r_interrupt <= 1;
 					r_state <= 4;
 				end else begin
 					r_state <= 2;
@@ -174,6 +172,16 @@ module spi(input clk, input reset,
 			end
 		end
 	4:	begin
+			if (r_count == 0) begin
+				r_count <= clk_count;
+				r_ready <= 1;
+				r_interrupt <= 1;
+				r_state <= 5;
+			end else begin
+				r_count <= r_count-1;
+			end
+		end
+	5:	begin
 			if (reg_write && reg_addr[2] == 0) begin
 				r_count <= clk_count;
                 r_bits <= 7;
