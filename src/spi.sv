@@ -163,6 +163,8 @@ module spi(input clk, input reset,
 				end
 				r_bits <= r_bits - 1;
 				if (r_bits == 0) begin
+					r_ready <= 1;
+					r_interrupt <= 1;
 					r_state <= 4;
 				end else begin
 					r_state <= 2;
@@ -172,16 +174,6 @@ module spi(input clk, input reset,
 			end
 		end
 	4:	begin
-			if (r_count == 0) begin
-				r_count <= clk_count;
-				r_ready <= 1;
-				r_interrupt <= 1;
-				r_state <= 5;
-			end else begin
-				r_count <= r_count-1;
-			end
-		end
-	5:	begin
 			if (reg_write && reg_addr[2] == 0) begin
 				r_count <= clk_count;
                 r_bits <= 7;
@@ -195,12 +187,36 @@ module spi(input clk, input reset,
 				end else begin
 					r_out <= reg_data_in;
 				end
-			end else
+			end else 
 			if (reg_read && reg_addr == 0) begin
-				r_ready <= 1;
 				r_interrupt <= 0;
+				if (r_count == 0) begin
+					r_state <= 0;
+					r_cs <= 3'b111;
+				end else begin
+					r_state <= 6;
+				end
+			end else
+			if (r_count != 0) begin
+				r_count <= r_count-1;
+			end
+		end
+	5:	begin
+			if (r_count == 0) begin
+				r_count <= clk_count;
+				r_state <= 2;
+			end else begin
+				r_count <= r_count-1;
+			end
+		end
+	6:	begin
+			if (r_count == 0) begin
+				r_ready <= 1;
+				r_count <= clk_count;
 				r_state <= 0;
 				r_cs <= 3'b111;
+			end else begin
+				r_count <= r_count-1;
 			end
 		end
 	default:;
