@@ -22,17 +22,21 @@ module spi(input clk, input reset,
 	reg [7:0]r_out;
 	reg [7:0]r_in;
 
+	reg	[7:0]r_timeout;
+	reg	[7:0]r_timeout_count;
+
 	reg  [1:0]r_sel;
 	reg  [2:0]r_src;
 	reg  [2:0]r_bits;
 	reg	      r_interrupt, r_ready;
 	assign	interrupt = r_interrupt;
-	reg  [6:0]r_clk_count[0:2];
-	reg  [6:0]r_count;
+	reg  [7:0]r_clk_count[0:2];
+	reg  [7:0]r_count;
 	reg  [1:0]r_mode[0:2];
 	reg	 [1:0]r_clk;
 	reg	 [1:0]r_mosi;
 	reg	 [2:0]r_cs;
+	reg	      r_searching;
 	assign spi_clk = r_clk;
 	assign mosi = r_mosi;
 	assign cs = r_cs;
@@ -48,8 +52,12 @@ module spi(input clk, input reset,
 			end
 			always @(posedge clk)
 			if (reg_write && reg_sel == I && reg_addr == 5) begin
-				r_clk_count[I] <= reg_data_in[6:0];
+				r_clk_count[I] <= reg_data_in;
 			end
+		end
+		always @(posedge clk)
+		if (reg_write && reg_addr == 7) begin
+			r_timeout <= reg_data_in;
 		end
 
 	endgenerate
@@ -63,14 +71,15 @@ module spi(input clk, input reset,
 		5'b00_100: reg_data_out = {5'b0, r_src[0], r_mode[0]};
 		5'b01_100: reg_data_out = {5'b0, r_src[1], r_mode[1]};
 		5'b10_100: reg_data_out = {5'b0, r_src[2], r_mode[2]};
-		5'b00_101: reg_data_out = {1'b0, r_clk_count[0]};
-		5'b01_101: reg_data_out = {1'b0, r_clk_count[1]};
-		5'b10_101: reg_data_out = {1'b0, r_clk_count[2]};
+		5'b00_101: reg_data_out = r_clk_count[0];
+		5'b01_101: reg_data_out = r_clk_count[1];
+		5'b10_101: reg_data_out = r_clk_count[2];
+		5'b??_111: reg_data_out = r_timeout[7:0];
 		default:   reg_data_out = 8'bx;
 		endcase
 	end
 
-	reg [6:0]clk_count;
+	reg [7:0]clk_count;
 	reg [1:0]mode;
 	always @(*) begin
 		case (r_sel) // synthesis full_case parallel_case
@@ -106,9 +115,11 @@ module spi(input clk, input reset,
 		r_ready <= 1;
 		r_interrupt <= 0;
 		r_bits <= 7;
+		r_searching <= 0;
 	end else
 	case (r_state)
 	0:	begin
+			r_searching <= 0;
 			if (reg_write && reg_addr == 0) begin
 				r_out <= reg_data_in;
 				r_count <= reg_sel==3?r_clk_count[0]:r_clk_count[reg_sel];
@@ -125,7 +136,7 @@ module spi(input clk, input reset,
 			r_mosi[sel] <= r_out[7];
 			if (r_count == 0) begin
 				if (~mode[0])
-					r_out <= {r_out[6:0], 1'bx};
+					r_out <= {r_out[6:0], 1'b1};
 				r_count <= clk_count;
 				if (r_sel != 3)
 					r_cs[r_sel] <= 0;
@@ -140,7 +151,7 @@ module spi(input clk, input reset,
 				r_clk[sel] <= ~mode[1];
 				if (mode[0]) begin
 					r_mosi[sel] <= r_out[7];
-					r_out <= {r_out[6:0], 1'bx};
+					r_out <= {r_out[6:0], 1'b1};
 				end else begin
 					r_in <= {r_in[6:0], miso[sel]};
 				end
@@ -154,19 +165,22 @@ module spi(input clk, input reset,
 				r_count <= clk_count;
 				r_clk[sel] <= mode[1];
 				if (~mode[0]) begin
-					if (r_bits != 0) begin
+					if (r_searching || r_bits != 0) begin
 						r_mosi[sel] <= r_out[7];
-						r_out <= {r_out[6:0], 1'bx};
+						r_out <= {r_out[6:0], 1'b1};
 					end
 				end else begin
 					r_in <= {r_in[6:0], miso[sel]};
 				end
 				r_bits <= r_bits - 1;
-				if (r_bits == 0) begin
+				if (r_searching? (!r_in[7] || (r_bits == 0 && r_timeout_count == 0)) : r_bits == 0) begin
+					r_searching <= 0;
 					r_ready <= 1;
 					r_interrupt <= 1;
 					r_state <= 4;
 				end else begin
+					if (r_bits == 0)
+						r_timeout_count <= r_timeout_count-1;
 					r_state <= 2;
 				end
 			end else begin
@@ -176,6 +190,8 @@ module spi(input clk, input reset,
 	4:	begin
 			if (reg_write && reg_addr[2] == 0) begin
                 r_bits <= 7;
+				r_searching <= reg_addr != 0;
+				r_timeout_count <= r_timeout;
 				if (r_count == 0) begin
 					r_count <= clk_count;
 					r_state <= 2;
@@ -186,7 +202,7 @@ module spi(input clk, input reset,
                 r_interrupt <= 0;
 				if (~mode[0]) begin
 					r_mosi[sel] <= reg_data_in[7];
-					r_out <= {reg_data_in[6:0], 1'bx};
+					r_out <= {reg_data_in[6:0], 1'b1};
 				end else begin
 					r_out <= reg_data_in;
 				end
