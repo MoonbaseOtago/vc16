@@ -173,7 +173,7 @@ module spi(input clk, input reset,
 					r_in <= {r_in[6:0], miso[sel]};
 				end
 				r_bits <= r_bits - 1;
-				if (r_searching? (!r_in[7] || (r_bits == 0 && r_timeout_count == 0)) : r_bits == 0) begin
+				if (r_searching? (!r_in[7] || (r_in[7:2]==6'h3f && !(&r_in[1:0])) || (r_bits == 0 && r_timeout_count == 0)) : r_bits == 0) begin
 					r_searching <= 0;
 					r_ready <= 1;
 					r_interrupt <= 1;
