@@ -1,0 +1,404 @@
+VC is a 16 or 32-bit architecture, it's essentially a RISCV C subset only - so 16-bit
+largely 2-address instructions.
+
+## Registers
+
+Most of the ISA operates on 8 GP registers, none are special in any way:
+
+	- 0 s0
+	- 1 s1
+	- 2 a0
+	- 3 a1
+	- 4 a2
+	- 5 a3
+	- 6 a4
+	- 7 a5
+
+Some instructions operate on 16 registers:
+
+
+	- 0 0 - returns - 0 value, writes are ignored
+	- 1 lr - link register (15 bits bit 0 always 0)
+	- 2 sp - stack pointer (15 bits bit 0 always 0)
+	- 3 epc - exception PC (15 bits PC, bit 0 previous kernel mode) *
+	- 4 csr - status register *
+	- 5 mmu - mmu access register *
+	- 6 stmp - kernel mode tmp *
+	- 7 mulhi - multiply/divide extension
+	- 8 s0
+	- 9 s1
+	- 10 a0
+	- 11 a1
+	- 12 a2
+	- 13 a3
+	- 14 a4
+	- 15 a5
+
+* - kernel mode only register - causes invalid instruction trap in user mode
+
+## Instructions
+
+rd - destination register (one of the 8)
+rs - source register (one of the 8)
+rs2 - 2nd source register (one of the 8)
+rr - destination register (one of the 16)
+RR - source register (one of the 16)
+cccc - constant (details vary to make decoding easy)
+
+000c cccc cccd dd00 - add	rd, sp, ccccccc0
+001c ccss sccd dd00 - lw	rd, ccccc0(rs)
+010c ccss sccd dd00 - lb	rd, ccccc(rs)
+100c cccc cccc cc00 - jal	li, ccccccccccc0(li)
+110c ccss scc2 2200 - sw	rs, ccccc0(rs2)
+111c ccss scc2 2200 - sb	rs, ccccc(rs2)
+
+000c ccdd dccc cc01 - add	rd, cccccccc
+001c ccdd dccc cc01 - jal	li, cccccccc0(pc)
+010c ccdd dccc cc01 - li	rd, cccccccc
+011c crrr rccc cc01 - addi2sp	sp, sp, ccccccc0 (rr == 2)
+		      lui	rr, ccccccc000000000 (rr!=2)
+1000 00dd dxxs ss01 - shl	rd, rd, rs
+1001 00dd dccc cc01 - shl	rd, rd, ccccc
+1000 01dd dxxs ss01 - shl	rd, rd, rs
+1001 01dd dccc cc01 - shl	rd, rd, ccccc
+100c 10dd dccc cc01 - and	rd, rd, cccccc
+1000 11dd d00s ss01 - sub	rd, rd, rs
+1000 11dd d01s ss01 - xor	rd, rd, rs
+1000 11dd d10s ss01 - or	rd, rd, rs
+1000 11dd d11s ss01 - and	rd, rd, rs
+101c cccc cccc cc01 - j		ccccccccccc0(pc)
+110c ccss sccc cc01 - beqz	rs, ccccccc0(pc)
+111c ccss sccc cc01 - bnez	rs, ccccccc0(pc)
+
+0000 ccdd dxxc cc10 - sll	rd, cccc
+0001 xxdd dxxs ss10 - sll	rd, rs
+010c crrr rccc cc10 - lw	rr, ccccccc0(sp)
+011c crrr rccc cc10 - lb	rr, ccccccc(sp)
+1000 xRRR R000 0010 - jr	(RR)   (jr (epc) is return from exception)
+1000 xrrr r0RR RR10 - mv	rr, RR
+1001 xRRR R000 0010 - jalr	li, (RR)   
+1001 xrrr r0RR RR10 - add	rr, RR
+110c cRRR Rccc cc10 - sw	RR, ccccccc0(sp)
+111c cRRR Rccc cc10 - sb	RR, ccccccc(sp)
+
+0000 0000 0000 xx11 - trap	(invalid instructions   ....0111 is breakpoint)
+0000 0000 0001 0111 - syscall	
+0000 0000 0001 1011 - swapsp	*	swaps sp and stmp if epc bit 0 is 0, kernel only
+0000 0000 0010 bb11 - flushall	bb *	flushes I and/or D cache (without writeback)
+0000 0000 01bb bb11 - invmmu	bbbbb *  invalidates mmu mappings
+001c ccss scc2 2211 - stio	rs, ccccc0(rs2) *
+001c ccdd dccs ss11 - ldio	rd, ccccc0(rs) *
+011c crrr rccc cc11 - lui	rr, ccccccc000000000 (not inverted sign extensikon)
+100c 10dd dccc cc11 - or	rd, cccccc
+1000 11dd d00s ss11 - mul	rd, rd, rs		(hi result in multhi)
+1000 11dd d01s ss11 - div	rd, rd, rs		(remainder in multhi)
+1000 11dd d10s ss11 - addb	rd, rd, rs		
+1000 11dd d11s ss11 - addbu	rd, rd, rs		
+1001 11dd d01s ss11 - add	rd, rd, pc
+1001 11dd d10s ss11 - sext	rd	
+1001 11dd d11s ss11 - zext	rd
+1010 00ss s000 0011 - flushw    (rs) *		flush write cache to mem
+110c ccss sccc cc11 - bltz	rs, ccccccc0(pc)
+111c ccss sccc cc11 - bgez	rs, ccccccc0(pc)
+
+Instructions marked '*' trap when executed in user mode
+
+
+## Kernel mode
+
+As mentioned above kernel mode has some registers which cause traps when accessed:
+
+* EPC - exception PC
+* STMP - kernel temporary
+* CSR
+* MMU
+
+The EPC register has thge PC at the point of the last exception, bit 0 is the Kernel/User state prior to the exception.
+
+The CSR contains various CPU state bits:
+
+* 7 user_io - if set usermode can use the stio/ldio instructions (mostly intended for system test)
+* 4 mmu D proxy - in kernel mode load and store instructions use the user mode MMU page mappings (and trap accordingly)
+* 3 mmu enable - turns on the MMU
+* 2 kernel mode - (read only, changed by jr (epc)) kernel (1)/user (0) mode
+* 1 previous IE - previous IE
+* 0 IE - interrupt enable
+
+At reset all bits are 0 except for the kernel mode bit.
+
+There are 5 exception vectors in low (MMU mapped if on) kernel space:
+
+* 0x0000 - reset
+* 0x0004 - trap (anything other than the next 3 traps)
+* 0x0008 - interrupt
+* 0x000C - syscall (the syscall instruction)
+* 0x0010 - MMU trap
+
+What an exception (other than reset) occurs the following happen:
+
+* The current PC (or next PC if it's an interrupt) is copied to EPC
+* bit 0 of EPC is set from CSR bit 2 (kernel/user)
+* CSR bit 2 (kernel/user) is set to 1 (kernel)
+* CSR bit 1 (previous IE) is set from CSR bit 0 (IE)
+* CSR bit 0 (IE) is set to 0
+* PC is set to the vector address epending on the exception type
+
+Exception return is initiated by executing the jr (epc) instruction, it essentially undoes the above process:
+
+* CSR bit 0 (IE) is set from CSR bit 1 (previous IE)
+* CSR bit 2 (kernel/user) is set from EPC bit 0
+* the PC is set from EPC
+
+VC is a RISC machine, when switching to kernel mode the CPU must save registers/etc before use, there is
+a special temporary register stmp that is intended to be the kernel stack pointer, on taking a trap the
+kernel trap handler can execute the swapsp instruction which will switch the current SP and the stmp
+registers, this will only happen if the previous mode was user mode (this way interrupts or MMU traps
+from kernel mode don't switch stacks). stmp is protected from user mode.
+
+A typical kernel trap handler that wants to execute C code
+might look like:
+
+* swapsp
+* sub	sp, 24
+* sw	epc, (sp)
+* sw 	stmp, 2(sp)
+* sw 	a0, 4(sp)
+* ,,,,
+* sw 	s1, 18(sp)
+* sw 	lr, 20(sp)
+* sw 	mulhi, 22(sp)
+* jal	c_code
+* lw	epc, (sp)
+* lw 	stmp, 2(sp)
+* lw 	a0, 4(sp)
+* ,,,,
+* lw 	s1, 18(sp)
+* lw 	lr, 20(sp)
+* lw 	mulhi, 22(sp)
+* add	sp, 24
+* swapsp
+* jr	(epc)
+
+## Memory address spaces
+
+There are two memory address spaces - qspi RAM/ROM, and I/O space. qspi is accesses by instruction fetch and
+lw/lb/sw/sb instructions through the MMU, I/O space is accessed from kernel mode only using the stio/ldio
+instructions and is not MMU mapped. 
+
+I/O space is separated into the following:
+
+* 0x00-0x0f - QSPI
+* 0x20-0x2f - UART
+* 0x40-0x4f - Interrupt controller
+* 0x50-0x5f - counter/timer
+* 0x80-0x9f - GPIO
+* 0xc0-0xff - SPI
+
+Actual IO accesses are always to even addresses (the LSB of addresses is ignored)
+
+The qspi controller supports up to 3 external qspi devices (0, 1 and 2) device 1 is the device boot code is
+fetched from at reset and is assumed to be a ROM. The controller runs in 4 modes:
+
+* 0 - device 0 is used for accesses 0-8Mb and device 2 for accesses to 8Mb to 16Mb
+* 1 - device 0 is used for accesses 0-8Mb
+* 2 - device 0 is used for accesses 0-16Mb
+* 3 - device 0 is used for write accesses 0-8Mb device 1 is used for read accesses 0-8Mb
+
+Mode 3 is the default at reset, device 2's CS needs to be set up in the GPIO controller before use.
+
+The QSPI controller has 4 registers:
+
+* 0x00 device 0
+** bit 7 - set if a mask must be sent
+** bit 6 - set if the device supports fast quad mode
+** bit 4:0 - read delay
+* 0x02 device 1
+** bit 7 - set if a mask must be sent
+** bit 6 - set if the device supports fast quad mode
+** bit 4:0 - read delay
+* 0x04 device 2
+** bit 7 - set if a mask must be sent
+** bit 6 - set if the device supports fast quad mode
+** bit 4:0 - read delay
+* 0x06 - bits 1:0 the mode as described above
+
+## MMU
+
+MMU accesses are for instruction accesses and ld/st instruction accesses. The MMU is turned on when the "mmu enable" bit in the CSR is set. The MMU maps a 16-bit virtual address to a 24 bit physical address. It is
+structured very much like a PDP split I/D address space MMU (or a 'Sun style' SRAM mmu). Essentialy there
+are 4 sets of MMU mapping tables - each table splits its virtual address space into 16 4k pages. There are
+two address spaces each for Kernel mode (instruction and data) and two for User mode (again instruction
+and data).
+
+This means that the kernel and a running user mode process can access up to 128k, 64k each of instruction
+and data (just like PDP11 split I/D space).
+
+There is a kernel access only 'mmu' register for accessing the MMU. Writes to an MMU entry can be
+performed by first writing to a virtual fault register and then writing the physical mapping data for that
+virtual address - which of these two is written to is determined by bit 0 of values written to the
+mmu register:
+
+Virtual address write:
+
+* bits 15-12 -  upper bits virtual fault address (bits 15:12)
+* bit  3 - fault is instruction space
+* bit  2 - fault is kernel space
+* bit  0 - 0
+
+Physical address:
+
+* bits 15-4 -  upper bits virtual fault address (bits 23:12)
+* bit  2 - 1 if mapping is writeable, 0 if read only (ignored for instruction spaces)
+* bit  1 - 1 if mapping is valid, 0 if invalid (if invalid all other bits are ignored)
+* bit  0 - 1
+
+Reads from the MMU register read the Virtual address mapping register, which is set when an
+MMU  exception occurs (which means that your don't always need to set it when responding to a MMU fault). It provides an aditional bit telling you why the trap happened.
+
+Virtual address read:
+
+* bits 15-12 -  upper bits virtual fault address (bits 15:12)
+* bit  3 - fault is instruction space
+* bit  2 - fault is kernel space
+* bit  1 - 1 if it's a valid bit, 0 if it's a write to read only page fault
+* bit  0 - 0
+
+There is an invmmu kernel mode only instruction that will invalidate one or more of the 4 mapping
+tables. It takes a 4 bit encoded argument: 3:ki 2:kd 1:ui 0:ud.
+
+## Interrupts
+
+There is a single CPU level interrupt it is enabled with bit 0 of the CSR, bit 1 has the previous mode which is set on traps and copied back to bit 0 on exception return. 
+
+The interrupt controller feeds the interrupt pending signal that is masked by csr.IE.
+
+There are 6 interrupt sources, each appears as a bit in the interrupt controller registers:
+
+* bit 5 - SPI
+* bit 4 - GPIO
+* bit 3 - SWI
+* bit 2 - TIMER
+* bit 1 - CLOCK
+* bit 0 - UART
+
+There are 3 readable registers in the interrupt controller:
+
+* 0x40 PENDING - shows the 6 pending interrupts (this is the logical and of the STATUS and ENABLE registers, the logical or of these bits feeds the CPU interrupt)
+* 0x42 STATUS - shows actual interrupts that are active
+* 0x44 ENABLE - 6 bits that enable corresponding interrupts
+
+The ENABLE register can also be written at address 0x42, 3 bits in the STATUS register can also be changed
+(SWI, TIMER CLOCK), the other bits are set/cleared in their corresponding IO units. These are NOT 
+set/cleared at address 0x42 - instead when you write to 0x48 bits with 1 are set, those with 0 don't change.
+When you write to 0x4A bits with 1 are cleared, those with 0 don't change.
+
+## Timer/Counter
+
+There is 32 bit clock and a 24-bit timer:
+
+0x50 - writes the low 16 bits of the clock counter
+0x52 - writes the uppper 16 bits of the clock counter and sets the lower 16 bits to 0
+0x54 - writes the low 16 bits of the clock compare register
+0x56 - writes the uppper 16 bits of the clock compare register
+0x5C - writes the low 16 bits of the timer counter reload register
+0x5E - writes the upper 8 bits of the timer counter reload register and then copies the entire reload register to the timer counter register.
+
+The timer always counts down, it's reloaded from the timer counter reload register when that register is
+loaded and when the timer counter reaches 0, when the counter reaches 0 the timer interrupt status bit is set in the interrupt controller.
+
+The clock counts up from where it's set by register writes, it wraps around to 0 and keeps counting. There is
+a clock comparator register, when the comparator register and the clock register match the clock bit in the
+clock bit in the interupt status register is set.
+
+## GPIOs
+
+The current TT chip has 8 inputs (in[7:0]), 8 outputs (out[7:0]), and 8 IO pins (io[7:0). Some of these pins
+are hardwired for qspi (out[2:0], io[3:0]) the rest can be mapped to any of the internal devices, or used as general I/O pins.
+
+Each out[7:2] or io[7:4] can be driven from one of 10 sources described by a 4 bit number:
+
+* 0 - GPIO
+* 1 - uart TX
+* 2 - spi_mosi[0]
+* 3 - spi_mosi[1]
+* 4 - spi_clk[0]
+* 5 - spi_clk[12]
+* 6 - spi_cs[0]
+* 7 - spi_cs[1]
+* 8 - spi_cs[2]
+* 11 - qspi_cs[2]
+
+Each internal device input (uart_rx, spi_miso[1:0]) can be mapped to in[7:0] or io[7:4] (uart can't be
+mapped to io[7:4])i with a 3/4 bit number. 
+
+* 0-7 - in[X]
+* 12-15 i io[X]
+
+GPIO registers:
+
+* 0x80 7:0 - pending interrupts from in[7:0]
+* 0x82 7:4 - pending interrupts from io[7:4]
+* 0x84 7:0 - current status for in[7:0]
+* 0x86 7:4 - current status for io[7:4]
+* 0x88 7:0 - interrupt enable for in[7:0] (0 at reset_
+* 0x8A 7:4 - interrupt enable for io[7:4] (0 at reset)
+* 0x90 7:0 - gpio output data for out[7:0]
+* 0x92 7:4 - gpio output data for io[7:4]
+* 0x94 7:4 - gpio direction for io[7:4] (1 means out, 0 at reset)
+* 0x96 7:0 - 7:4 input source spi_miso[1], 3:0 input source spi_miso[0]
+* 0x98 2:0 - 2:0 input source uart_rx  (0 at reset)
+* 0xA2 7:4 - 7:4 source for out[3]
+* 0xA4 7:0 - 7:4 source for out[5], 3:0 source for out[4]
+* 0xA6 7:0 - 7:4 source for out[7], 3:0 source for out[6] (default 1 for 3:0)
+* 0xAC 7:0 - 7:4 source for io[5], 3:0 source for io[4]
+* 0xAE 7:0 - 7:4 source for io[7], 3:0 source for io[7]
+
+Interrupts are level sensitive, active high only. The Interrupt signal to the interruopt controller
+is the logical or of all the bits in the 2 pending registers. The pending registers are the logical
+and of the corresponding bits in the 2 enable registers and the in/io pins.
+
+## UART
+
+The UART is very simple, only supports 8 bits no parity - baud rate is set by a 12-bit register - the baud
+rate is the value of the system clock (50MHz) divided by 4 times the register value.
+
+UART registers are:
+
+* 0x10 - read only, input receive buffer, if the receive interrupt bit is set it will be cleared on read
+* 0x12 - write only, output transmit buffer, if the transmit interrupt bit is set it will be cleared on write
+* 0x14 - bit 1 receive interrupt pending, bit 0 transmit interrupt pending (both bits 0 at reset) when this register is written 0 bits are ignored, 1 bits clear the pending bit)
+* 0x16 - bit 1 RX invert, bit 0 TX invert (both bits 0 at reset)
+* 0x18 - 8 lower bits of baud counter
+* 0x1A - 4 upper bits of baud counter
+
+## SPI
+
+There is a single SPI controller, it can talk up to 3 SPI devices (3 CS pins) on 1 or 2 SPI buses
+(1 or 2 CLK/MISO/MOSI pairs).
+
+There are 3 register sets for the 3 devices are at 0xC0/0xD0/0xE0:
+
+* 0xC0 - writes start sending a byte (8 bits) and drop CS, reads return the last read data and raise CS
+* 0xC2 - writes start sending data (8+ bits) and put the spi controller into SD searching mode, reads return the latest data read and leaves CS low
+* 0xC4 - bit 0 device ready - set when a byte has been sent, cleared when another is sent or CS rises (reset to 0)
+* 0xC6 - bit 0 interrupt - set when a byte has been sent, cleared when another is sent or CS rises (reset to 0)
+* 0xC8 - bits 1:0 SPI mode (clock/data timing/etc), bit 2 SRC (which miso/mosi pair
+* 0xCA - bits 7:0 clock speed - this is the number of CPU clocks (-1) foir each phase of the SPI clock
+* 0XCE - bits 7:0 (shared between all devices) searching mode timeout in units of 8 clocks
+
+The way to use this unit is to send command data to 0xC0 (0xD0/0xE0) CS will go down and 8 bits will be sent
+wait until the ready bit is set and then send another byte by writing to the same address (repeat if required), or read from that
+address to stop the transaction and raise CS. To do a read transaction start sending commands to 0xC0/etc 
+when the time comes to read send 0xff to trigger 8 clocks, wait for the ready flag then read from 0xC2, or
+if it's the last read byte read from 0xC0.
+
+There is some special modes for SD cards - if you perform a transaction to 0xF0 (writing only 0xFFs) it will use
+the clock timing/etc for device 0 (0xC0) but not drop any CS - this can be used to send an SD Card SPI mode
+reset. There is also a 'searching mode (triggered by writing 0xFF to 0xC2/etc) this will put the device 
+into searching, it will find a non-byte aligned response and stop when bit 7 of the in register receives 
+it's first 0 bit. Subsequent transactions will be byte aligned with that last one.
+
+The 3 SPI devices share the same statemachine, only one device can be active at a time, you must raise
+CS on one device before using another device (including 0xF0).
+
+
