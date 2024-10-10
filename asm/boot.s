@@ -44,10 +44,10 @@ putchr:	stio	a0, 2(a5)
 	ret
 
 puts:	mv	s1, lr
-	mv	a3, a0
-1:	lb	a0, (a3)
+	mv	s0, a0
+1:	lb	a0, (s0)
 	beqz	a0, 2f
-		add	a3, 1
+		add	s0, 1
 		mv	a1, a0
 		sub	a1, '\n'
 		bnez	a1, 3f
@@ -141,9 +141,14 @@ reset_spi_done:
 	li	a4, 0xc0
 	li	a0, -1
 	stio	a0, 14(a4)
-	la	a0, spi_cmd0
+
+1:	la	a0, spi_cmd0
 	li	a1, 6	// send
 	jal	send_spi_1
+
+	li	s1, 0xff
+	sub 	s1, a0
+	beqz	s1, 1b
 
 	j	cont
 
@@ -166,15 +171,15 @@ read_spi:
 	ret
 
 cont:
-	mv	s0, a0
+	mv	a3, a0
 	jal	puthex
 	la	a0, lf_msg
 	jal	puts
 
 	li	s1, 0xff
-	sub 	s1, s0
-	sub	s0, 1
-	beqz	s0, OK_spi
+	sub 	s1, a3
+	sub	a3, 1
+	beqz	a3, OK_spi
 		beqz	s1, 1f
 		j	start
 1:		j	again
@@ -183,7 +188,7 @@ OK_spi:
 	la	a0, spi_cmd8
 	li	a1, 6	// send
 	jal	send_spi_1
-	mv	s0, a0
+	mv	a3, a0
 	jal	puthex
 	la	a0, lf_msg
 	jal	puts
@@ -192,7 +197,7 @@ initing:
 	la	a0, spi_cmd55
 	li	a1, 6	// send
 	jal	send_spi_1
-	mv	s0, a0
+	mv	a3, a0
 	jal	puthex
 	la	a0, lf_msg
 	jal	puts
@@ -200,26 +205,26 @@ cmd41:
 	la	a0, spi_acmd41
 	li	a1, 6	// send
 	jal	send_spi_1
-	mv	s0, a0
+	mv	a3, a0
 	jal	puthex
 	la	a0, lf_msg
 	jal	puts
 
 	li	a1, 0xff
-	sub	a1, s0
+	sub	a1, a3
 	beqz	a1, 1f
-		bnez	s0, initing	// waiting for it to go to 0
+		bnez	a3, initing	// waiting for it to go to 0
 		j	1f
 2:
 		la	a0, spi_cmd1
 		li	a1, 6	// send
 		jal	send_spi_1
-		mv	s0, a0
+		mv	a3, a0
 		jal	puthex
 		la	a0, lf_msg
 		jal	puts
 
-		bnez    s0, 2b
+		bnez    a3, 2b
 
 1:
 	li	a0, 4		// 2.5MHz
@@ -228,7 +233,7 @@ cmd41:
 	la	a0, spi_cmd16
 	li	a1, 6	// send
 	jal	send_spi_1
-	mv	s0, a0
+	mv	a3, a0
 	jal	puthex
 	la	a0, lf_msg
 	jal	puts
@@ -236,7 +241,7 @@ cmd41:
 	li	a2, 0		// memory address
 	li	a3, 0		// block counter
 
-		la	a0, bl_msg
+1:		la	a0, bl_msg
 		jal	puts
 		mv	a0, a3
 		jal	puthex
@@ -304,7 +309,7 @@ rd:
 	sub	s0, a0
 	beqz	s0, 2b
 
-	add	s0, 1
+	sub	s0, 1
 	bnez	s0, 9f
 
 	li	s1, 512
@@ -326,7 +331,7 @@ rd:
 			beqz    a0, 1b
 	
 	
-9:	ldio	a1, 0(a0)	// drop cs
+9:	ldio	a1, 0(a4)	// drop cs
 	ret
 
 
@@ -335,6 +340,8 @@ rd:
 
 
 go_boot:
+	la	a0, loaded_msg
+	jal	puts
 	li	a0, 64
 	li	a1, 0
 	li	a2, 4
@@ -394,6 +401,7 @@ spi_cmd55:
 trap_err:	.string "trap error\n"
 start_msg:	.string	"\nBooting looking for sdcard .... \n"
 spi_init_msg:	.string	"SPI Init result: "
+loaded_msg:	.string	"Loaded - booting into code ...\n"
 bl_msg:		.string	"read block "
 cl_msg:		.string	": "
 lf_msg:		.string	"\n"

@@ -1,55 +1,23 @@
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
-#include <stdlib.h>
 #include <ctype.h>
-#include <unistd.h>
 
+#include <stdlib.h>
+
+#ifdef BSD
+#include <sys/exec.h>
 #define _AOUT_INCLUDE_
-
-struct	exec {
-	int	      a_magic;	    /* magic number */
-	unsigned int  a_text;	    /* size of text segment */
-	unsigned int  a_data;	    /* size of initialized data	*/
-	unsigned int  a_bss;	    /* size of uninitialized data */
-	unsigned int  a_syms;	    /* size of symbol table */
-	unsigned int  a_entry;	    /* entry point */
-	unsigned int  a_unused;	    /* not used	*/
-	unsigned int  a_flag;	    /* relocation info stripped	*/
-};
-
-
-#define	NOVL	      15	    /* number of overlays */
-struct	ovlhdr {
-	int	      max_ovl;	    /* maximum overlay size */
-	unsigned int  ov_siz[NOVL]; /* size of i'th overlay */
-};
-
-struct	xexec {
-	struct exec e;
-	struct ovlhdr o;
-};
-
-#define	A_MAGIC1      0407	    /* normal */
-#define	A_MAGIC2      0410	    /* read-only text */
-#define	A_MAGIC3      0411	    /* separated I&D */
-#define	A_MAGIC4      0405	    /* overlay */
-#define	A_MAGIC5      0430	    /* auto-overlay (nonseparate) */
-#define	A_MAGIC6      0431	    /* auto-overlay (separate) */
-
-struct	nlist {
-#ifdef	_AOUT_INCLUDE_
-	union {
-	      char *n_name;/* In memory	address	of symbol name */
-	      off_t n_strx;/* String table offset (file) */
-	} n_un;
+#include <nlist.h>
 #else
-	char	      *n_name;	 /* symbol name	(in memory) */
+#define N_TYPE	0x7
+#define N_UNDF	0x0
+#define N_ABS	0x1
+#define N_TEXT	0x2
+#define N_DATA	0x3
+#define N_BSS	0x4
+#define N_EXT	0x8
 #endif
-	u_char	      n_type;	 /* Type of symbol - see below */
-	char	      n_ovly;	 /* Overlay number */
-	u_int	      n_value;	 /* Symbol value */
-};
 
 /*
  *	relocation data 1 word/word of text/data
@@ -64,28 +32,14 @@ struct	nlist {
 #define REL_LUI 	6
 #define REL_ADD 	10
 
-/*
-* Simple values	for n_type.
-*/
-#define	N_UNDF	      0x0	 /* undefined */
-#define	N_ABS	      0x1	 /* absolute */
-#define	N_TEXT	      0x2	 /* text symbol	*/
-#define	N_DATA	      0x3	 /* data symbol	*/
-#define	N_BSS	      0x4	 /* bss	symbol */
-#define	N_REG	      0x14	 /* register name */
-#define	N_FN	      0x1f	 /* file name symbol */
-
-#define	N_EXT	      0x20	 /* external bit, or'ed	in */
-#define	N_TYPE	      0x1f	 /* mask for all the type bits */
-
 struct symbol {
 	char *name;
 	unsigned int offset;	
-	unsigned int soffset;	// string table offset
-	unsigned int toffset;	// symbol table offset
+	unsigned int  soffset;	/* string table offset */
+	unsigned int toffset;	/* symbol table offset */
 	int index;
-	unsigned char type;	// N_ type
-	unsigned char found;	// 0 unreferenced, 1 defined
+	unsigned char type;	/* N_ type */
+	unsigned char found;	/* 0 unreferenced, 1 defined */
 	struct symbol *next;
 };
 int sym_index=0;
@@ -138,17 +92,22 @@ int errs=0;
 int bit32=0;
 int sym_count;
 
-void declare_label(int type, int ind);
-void emit(unsigned int ins);
-void emit_data(int word, unsigned int data);
-void emit_space(unsigned int sz);
-void set_seg(int seg);
-void set_offset(int type, unsigned int offset);
-unsigned ref_label(int ind, int type, int offset);
-void set_extern(int ind);
+void declare_label(/*int type, int ind*/);
+void emit(/*unsigned int ins*/);
+void emit_data(/*int word, unsigned int data*/);
+void emit_space(/*unsigned int sz*/);
+void emit_string();
+void set_seg(/*int seg*/);
+void set_offset(/*int type, unsigned int offset*/);
+unsigned ref_label(/*int ind, int type, int offset*/);
+void set_extern(/*int ind*/);
+void set_global(/* int */);
+void align();
 
 int
-shift_exp(int r) {
+shift_exp(r)
+int r;
+{
 	if (!bit32) {
 		if (r >= 1 && r <= 16)
 			return ((r&0xc)<<1) | ((r&3)<<5);
@@ -164,7 +123,9 @@ shift_exp(int r) {
 
 
 int
-check_inv(int r) {
+check_inv(r)
+int r;
+{
 	if (r>=1 &&r <= 15)
 		return r<<2;
 	errs++;
@@ -172,7 +133,9 @@ check_inv(int r) {
 	return 0;
 }
 void
-chkr(int r) {
+chkr(r)
+int r;
+{
 	if (r&8)
 		return;
 	errs++;
@@ -180,7 +143,8 @@ chkr(int r) {
 	
 }
 
-int imm6(int v)
+int imm6(v)
+int v;
 {
 	if (v < 0 || v >= (1<<6)) {
 		errs++;
@@ -189,9 +153,10 @@ int imm6(int v)
 	return(((v&0x3)<<5) | (((v>>2)&3)<<3) |(((v>>4)&1)<<12) | (((v>>5)&1)<<2));
 }
 
-int imm8(int v, int l)
+int imm8(v, l)
+int v, l;
 {
-	if (!bit32 && v&0x8000)
+	if (sizeof(int) > 2 && !bit32 && v&0x8000)
 		v |= 0xffff0000;
 	if (v < -(1<<7) || v >= (1<<7)) {
 		errs++;
@@ -200,7 +165,8 @@ int imm8(int v, int l)
 	return(((v&0x3)<<5) | (((v>>2)&7)<<10)| (((v>>5)&7)<<2));
 }
 
-int roffX(int v)
+int roffX(v)
+int v;
 {
 	if (bit32?v&3:v&1) {
 		errs++;
@@ -224,7 +190,8 @@ int roffX(int v)
 	}	
 }
 
-int roffIO(int v)
+int roffIO(v)
+int v;
 {
 	if (v&1) {
 		errs++;
@@ -239,7 +206,9 @@ int roffIO(int v)
 	return ( (((v>>1)&1)<<6) | (((v>>2)&3)<<10));
 }
 
-int roff(int v)
+int
+roff(v)
+int v;
 {
 	if (v < 0 || v >= (1<<5)) {
 		errs++;
@@ -253,7 +222,8 @@ int roff(int v)
 	}	
 }
 
-int offX(int v)
+int offX(v)
+int v;
 {
 	if (bit32?v&3:v&1) {
 		errs++;
@@ -278,7 +248,8 @@ int offX(int v)
 	return ( ((v&1)<<6)  | (((v>>1)&1)<<5) | (((v>>2)&3)<<11|(((v>>4)&7)<<2)));
 }
 
-int off(int v)
+int off(v)
+int v;
 {
 	if (v < 0 || v >= (1<<7)) {
 		errs++;
@@ -292,7 +263,8 @@ int off(int v)
 	}	
 }
 
-int zoffX(int v)
+int zoffX(v)
+int v;
 {
 	if (bit32?v&3:v&1) {
 		errs++;
@@ -317,7 +289,8 @@ int zoffX(int v)
 	return ( ((v&1)<<6)  |  (((v>>1)&7)<<10)|(((v>>4)&1)<<5)|(((v>>5)&7)<<7));
 }
 
-int addsp(int v)
+int addsp(v)
+int v;
 {
 	if (bit32?v&3:v&1) {
 		errs++;
@@ -342,7 +315,8 @@ int addsp(int v)
 	return ( ((v&1)<<6)  | (((v>>1)&1)<<5) | (((v>>2)&3)<<11)|(((v>>4)&7)<<2) );
 }
 
-int luioff(int v, int l)
+int luioff(v, l)
+int v, l;
 {
 	if (v&0xff || v&~0xffff) {
 		errs++;
@@ -357,18 +331,20 @@ int luioff(int v, int l)
 	return (((v&0x1f)<<2)| (((v>>5)&1)<<12) | (((v>>6)&1)<<11));
 }
 
-int simple_li(int v)
+int simple_li(v)
+int v;
 {
-	if (!bit32 && v&0x8000)
+	if (sizeof(int) > 2 && !bit32 && v&0x8000)
 		v |= 0xffff0000;
 	if (v < -(1<<7) || v >= (1<<7) ) 
 		return 0;
 	return 1;
 }
 
-int lioff(int v)
+int lioff(v)
+int v;
 {
-	if (!bit32 && v&0x8000)
+	if (sizeof(int) > 2 && !bit32 && v&0x8000)
 		v |= 0xffff0000;
 	if (v < -(1<<7) || v >= (1<<7) ) {
 		errs++;
@@ -378,14 +354,14 @@ int lioff(int v)
 	return(((v&0x3)<<5) | (((v>>2)&7)<<10)| (((v>>5)&7)<<2));
 }
 
-int yylex(void);
-void yyerror(char *err);
+int yylex();
+void yyerror();
 
 #include "vc.tab.c"
 
 struct tab {char *name; int token; };
 
-struct tab reserved[] = {
+static struct tab reserved[] = {
 	"a0", t_a0,
 	"a1", t_a1,
 	"a2", t_a2,
@@ -396,6 +372,7 @@ struct tab reserved[] = {
 	"addb", t_addb,
 	"addbu", t_addbu,
 	"addpc", t_addpc,
+	"align", t_align,
 	"and", t_and,
 	"beqz", t_beqz,
 	"bgez", t_bgez,
@@ -411,6 +388,7 @@ struct tab reserved[] = {
 	"epc", t_epc,
 	"extern", t_extern,
 	"flush", t_flush,
+	"global", t_global,
 	"icache", t_icache,
 	"inv", t_inv,
 	"invmmu", t_invmmu,
@@ -445,6 +423,7 @@ struct tab reserved[] = {
 	"srl", t_srl,
 	"stio", t_stio,
 	"stmp", t_stmp,
+	"string", t_string,
 	"sub", t_sub,
 	"sw", t_sw,
 	"swap", t_swap,
@@ -459,7 +438,8 @@ struct tab reserved[] = {
 
 
 void
-declare_label(int type, int ind)
+declare_label(type, ind)
+int type, ind;
 {
 
 	if (type) {
@@ -471,7 +451,7 @@ use:
 			sp->offset = (seg?data_size:text_size);
 			sp->seg = seg;
 			for (rp = num_ref_first; rp;) {
-				if (rp->seg == seg && rp->ind == ind) {
+				if (rp->ind == ind) {
 					unsigned offset;
 					int delta;
 					unsigned short *cp;
@@ -520,7 +500,7 @@ use:
 			}
 			return;
 		} 
-		sp = malloc(sizeof(*sp));
+		sp = (struct num_label *)malloc(sizeof(*sp));
 		assert(sp);
 		sp->next = num_first;
 		sp->index = ind;
@@ -548,7 +528,21 @@ use:
 }
 
 void
-set_extern(int ind)
+set_extern(ind)
+int ind;
+{
+	struct symbol *sp;
+	for (sp = list; sp; sp = sp->next) 
+	if (sp->index == ind) {
+		sp->type = N_EXT|N_UNDF;
+		return;
+	}
+	assert(1);
+}
+
+void
+set_global(ind)
+int ind;
 {
 	struct symbol *sp;
 	for (sp = list; sp; sp = sp->next) 
@@ -558,12 +552,15 @@ set_extern(int ind)
 	}
 	assert(1);
 }
+void set_global(/* int */);
 
 
 unsigned
-ref_label(int ind, int type, int offset)
+ref_label(ind, type, offset)
+int ind, type, offset;
 {
 	struct reloc *rp;
+
 	if (type == 6 || type == 7) {
 		if (ind < 0) {
 			struct num_label *np;
@@ -576,7 +573,7 @@ ref_label(int ind, int type, int offset)
 					errs++;
 					fprintf(stderr, "%d: '%db' jmp to another segment not allowed\n", line, ind);
 					return 0;
-				} else
+				} 
 				delta = np->offset-offset;
 				if (type == 6) {
 					if (delta < -(1<<10) || delta >= (1<<10)) {
@@ -600,7 +597,7 @@ ref_label(int ind, int type, int offset)
 			errs++;
 		} else {
 			struct num_ref *rp;
-			rp = malloc(sizeof(*rp));
+			rp = (struct num_ref *)malloc(sizeof(*rp));
 			assert(rp);
 			rp->ind = ind;
 			rp->type = type;
@@ -615,7 +612,7 @@ ref_label(int ind, int type, int offset)
 		}
 		return 0;
 	}
-	rp = malloc(sizeof(*rp));
+	rp = (struct reloc *)malloc(sizeof(*rp));
 	switch (seg) {
 	case 0: rp->offset = text_size; break;
 	case 1: rp->offset = data_size; break;
@@ -640,7 +637,8 @@ static unsigned char text_over=0;
 static unsigned char data_over=0;
 
 void
-set_seg(int s)
+set_seg(s)
+int s;
 {
 	if (s && !aout) {
 		fprintf(stderr, "%d: can only change segments for a.out format files\n", line-1);
@@ -650,8 +648,18 @@ set_seg(int s)
 	seg = s;
 }
 
+void align()
+{
+	switch (seg) {
+	case 0: if (text_size&1) text_size++; break;
+	case 1: if (data_size&1) text_size++; break;
+	case 2: if (bss_size&1) bss_size++; break;
+	}
+}
+
 void
-emit_space(unsigned int sz)
+emit_space(sz)
+unsigned int sz;
 {
 	switch (seg) {
 	case 0:	if ((text_size+sz) >= (sizeof(text))) {
@@ -680,7 +688,9 @@ emit_space(unsigned int sz)
 }
 
 void
-emit_data(int word, unsigned int datav)
+emit_data(word, datav)
+int word;
+unsigned int datav;
 {
 	switch (seg) {
 	case 0:	if (word && text_size&1)
@@ -698,9 +708,9 @@ emit_data(int word, unsigned int datav)
 			text_size += 2;
 		} else {
 			if (text_size&1) {
-				text[text_size>>1] = datav&0xff;
-			} else {
 				text[text_size>>1] |= (datav&0xff)<<8;
+			} else {
+				text[text_size>>1] = datav&0xff;
 			}
 			text_size++;
 		}
@@ -720,9 +730,9 @@ emit_data(int word, unsigned int datav)
 			data_size += 2;
 		} else {
 			if (data_size&1) {
-				data[data_size>>1] = datav&0xff;
-			} else {
 				data[data_size>>1] |= (datav&0xff)<<8;
+			} else {
+				data[data_size>>1] = datav&0xff;
 			}
 			data_size++;
 		}
@@ -733,8 +743,22 @@ emit_data(int word, unsigned int datav)
 	}
 }
 
+
+static char *string;
 void
-emit(unsigned int ins)
+emit_string()
+{
+	char *cp = string;
+	while (*cp)
+		emit_data(0, *cp++);
+	emit_data(0, 0);
+	free(string);
+	string = 0;
+}
+
+void
+emit(ins)
+unsigned int ins;
 {
 	switch (seg) {
 	case 0:	if (text_size >= (sizeof(text))) {
@@ -766,7 +790,9 @@ emit(unsigned int ins)
 }
 
 void
-set_offset(int type, unsigned int offset)
+set_offset(type, offset)
+int type;
+unsigned int offset;
 {
 	switch (seg) {
 	case 0: if (type) {
@@ -794,14 +820,15 @@ FILE *fin;
 int eof=0;
 
 void
-yyerror(char *err)
+yyerror(err)
+char *err;
 {
 	errs++;
 	fprintf(stderr, "%d: %s\n", line, err);
 }
 
 int
-yylex(void)
+yylex()
 {
 	int c;
 
@@ -842,6 +869,42 @@ yylex(void)
 		line++;
 		return t_nl;
 	} else
+	if (c == '"') {
+		char v[256];
+		int ind=0;
+		for (;;) {
+			c = fgetc(fin);
+			if (c == '"') {
+				char *cp = malloc(ind+1);
+				v[ind++] = 0;
+				if (cp)
+					strcpy(cp, &v[0]);
+				string = cp;
+				return t_stringv;
+			}
+			if (c == '\\') {
+				c = fgetc(fin);
+				if (c == '\n')
+					continue;
+				switch (c) {
+				case 'n': c = '\n'; break;
+				case 'r': c = '\r'; break;
+				case 't': c = '\t'; break;
+				case '"': c = '"'; break;
+				case '\\': c = '\\'; break;
+				default:;
+				}
+			}
+			if (ind >= (sizeof(v)-1)) {
+				char * cp = malloc(1);
+				*cp = 0;
+				yyerror("string too long");
+				string = cp;
+				return t_stringv;
+			}
+			v[ind++] = c;
+		}
+	} else 
 	if (c == '\'') {
 		c = fgetc(fin);
 		if (c == '\\') {
@@ -864,6 +927,7 @@ yylex(void)
 	} else
 	if (c >= '0' && c <= '9') {
 		int ind;
+		char *tmp;
 		char v[100];
 		char c1;
 		c1 = c;
@@ -871,7 +935,9 @@ yylex(void)
 		v[ind++] = c;
 		c = fgetc(fin);
 		if (c1 == '0' && (c == 'x' || c == 'X')) {
-			v[ind++] = c;
+			char *cp;
+			/*v[ind++] = c;*/
+			ind = 0;
 			c = fgetc(fin);
 			while (isxdigit(c)) {
 				if (ind < (sizeof(v)-1))
@@ -880,9 +946,19 @@ yylex(void)
 			}
 			v[ind] = 0;
 			ungetc(c, fin);
-			yylval = strtol(v, NULL, 16);
+			yylval=0;
+			for (cp = &v[0];*cp;cp++)
+			if (*cp >= '0' && *cp <= '9') {
+				yylval = (yylval<<4)+(*cp-'0');
+			} else
+			if (*cp >= 'a' && *cp <= 'f') {
+				yylval = (yylval<<4)+(*cp+10-'a');
+			} else {
+				yylval = (yylval<<4)+(*cp+10-'A');
+			}
 		} else
 		if (c1 == '0') {
+			char *cp;
 			while (c >= '0' && c <= '7') {
 				if (ind < (sizeof(v)-1))
 					v[ind++] = c; 
@@ -890,7 +966,9 @@ yylex(void)
 			}
 			v[ind] = 0;
 			ungetc(c, fin);
-			yylval = strtol(v, NULL, 8);
+			yylval=0;
+			for (cp = &v[0];*cp;cp++)
+				yylval = (yylval<<3)+(*cp-'0');
 		} else {
 			while (isdigit(c)) {
 				if (ind < (sizeof(v)-1))
@@ -899,11 +977,11 @@ yylex(void)
 			}
 			v[ind] = 0;
 			if (c == 'f' || c == 'b') {
-				yylval = (c=='f'?1:-1)*strtol(v, NULL, 0);
+				yylval = (c=='f'?1:-1)*atoi(v);
 				return t_num_label;
 			}
 			ungetc(c, fin);
-			yylval = strtol(v, NULL, 0);
+			yylval = atoi(v);
 		}
 		return t_value;
 	} else
@@ -934,7 +1012,7 @@ yylex(void)
 			yylval = sp->index;
 			return t_name;
 		}
-		sp = malloc(sizeof(*sp));
+		sp = (struct symbol *)malloc(sizeof(*sp));
 		sp->index = sym_index++;
 		sp->found = 0;
 		sp->name = strdup(v);
@@ -974,7 +1052,9 @@ yylex(void)
 }
 
 int
-main(int argc, char **argv)
+main(argc, argv)
+int argc;
+char **argv;
 {
 	int i, bin_out=0,hex_out=0,src_out=0,dump_symbols=0;
 	struct reloc *rp;
@@ -1027,7 +1107,6 @@ main(int argc, char **argv)
 		return 1;
 	}
 	if (yyparse()) {
-		//fprintf(stderr, "%d: syntax error\n", line);
 		return 1;
 	}
 	if (text_size&1)
@@ -1040,7 +1119,6 @@ main(int argc, char **argv)
 		errs++;
 		fprintf(stderr, "%d: '%df' not defined\n", np->line, np->ind);
 	}
-	if (!aout)
 	for (rp = reloc_first; rp; rp = rp->next) {
 		struct symbol *sp;
 		int found = 0;
@@ -1051,22 +1129,22 @@ main(int argc, char **argv)
 			if (!sp->found) {
 				errs++;
 				fprintf(stderr, "%d: '%s' not defined\n", rp->line, sp->name);
-			} else
+			} else 
 			switch (rp->type) {
-			case 1: text[rp->offset>>1] += sp->offset;
+			case 1:
+				text[rp->offset>>1] += sp->offset;
 				break;
-			case 2:	// jmp
+			case 2:	/* jmp */
 				delta = sp->offset-rp->offset;
 				if (delta < -(1<<10) || delta >= (1<<10)) {
 					errs++;
 					fprintf(stderr, "%d: '%s' jmp too far\n", rp->line, sp->name);
 				} else {
 					v = (((delta>>1)&7)<<3) | (((delta>>4)&1)<<11) | (((delta>>5)&1)<<2) | (((delta>>6)&1)<<7) | (((delta>>7)&1)<<6) | (((delta>>8)&3)<<9)| (((delta>>10)&1)<<8) | (((delta>>11)&1)<<12);
-//printf("reloc[%d] delta=0x%d v=0x%x line=%d '%s'\n", rp->offset, delta, v, rp->line, sp->name);
 					text[rp->offset>>1] |= v;
 				}
 				break;
-			case 3:	// branch
+			case 3:	/* branch */
 				delta = sp->offset-rp->offset;
 				if (delta < -(1<<6) || delta >= (1<<6)) {
 					errs++;
@@ -1076,9 +1154,9 @@ main(int argc, char **argv)
 					text[rp->offset>>1] |= v;
 				}
 				break;
-			case 4:	// la lui part
+			case 4:	/* la lui part */
 				delta = sp->offset+rp->extra;
-				if (delta >= (1<<15)) {
+				if (sizeof(int) > 2 && delta >= (1<<15)) {
 					errs++;
 					fprintf(stderr, "%d: '%s' la too far\n", rp->line, sp->name);
 				} else {
@@ -1090,7 +1168,7 @@ main(int argc, char **argv)
 					text[rp->offset>>1] |= luioff(delta, rp->line);
 				}
 				break;
-			case 5:	// la add part
+			case 5:	/* la add part */
 				delta = (sp->offset+rp->extra)&0xff;
 				if (delta&0x80) 
 					delta = -(0x100-delta);
@@ -1139,6 +1217,7 @@ main(int argc, char **argv)
 			}
 		} else 
 		if (aout) {
+#ifdef NOTDEF
 			FILE *fout = fopen(out_name, "wb");
 			if (fout) {
 #ifdef NOTDEF
@@ -1202,7 +1281,7 @@ outerr:
 				if (reloc_first) {
 					struct reloc *rp = reloc_first;
 					unsigned short s;
-					for (i = 0; i < text_size; i+=2) {	// text reloc
+					for (i = 0; i < text_size; i+=2) {	/* text reloc */
 						while (rp && rp->seg !=0)
 							rp = rp->next;
 						s = 0;
@@ -1210,26 +1289,47 @@ outerr:
 							for (sp = list; sp; sp=sp->next) 
 							if (rp->index == sp->index) {
 								switch (rp->type) {
-								case 1: s = sp->toffset|REL_ABS;
+								case 1: 
+									if (!sp->found) {
+										s = REXT|(sp->toffset<<4);
+									} else
+									switch (sp->type) {
+									case 0: s = RTEXT; break;
+									case 1: s = RDATA; break;
+									case 2: s = RBSS; break;
+									}
 									break;
-								case 2:	s = sp->toffset|REL_JMP;
+								case 2:	break;
+								case 3:	break;
+								case 4:	/* la lui part */
+									if (!sp->found) {
+										s = REXT|(sp->toffset<<4)|1;
+									} else
+									switch (sp->type) {
+									case 0: s = RTEXT|1; break;
+									case 1: s = RDATA|1; break;
+									case 2: s = RBSS|1; break;
+									}
 									break;
-								case 3:	s = sp->toffset|REL_BR;
-									break;
-								case 4:	// la lui part
-									s = sp->toffset|REL_LUI;
-									break;
-								case 5:	// la add part
-									s = sp->toffset|REL_ADD;
+								case 5:	/* la add part */
+									if (!sp->found) {
+										s = REXT|(sp->toffset<<4)|RBSS|1;
+									} else
+									switch (sp->type) {
+									case 0: s = RTEXT|(1<<4)1; break;
+									case 1: s = RDATA|(1<<4)1; break;
+									case 2: s = RBSS|(1<<4)1; break;
+									}
 									break;
 								}
+								break;
 							}
 							rp = rp->next;
 						}
 						if (fwrite(&s, 2, 1, fout) != 1) goto outerr;
 					}
 					rp = reloc_first;
-					for (i = 0; i < data_size; i+=2) {	// data reloc
+					for (i = 0; i < data_size; i+=2) {	/* data reloc */
 						while (rp && rp->seg !=1)
 							rp = rp->next;
 						s = 0;
@@ -1243,10 +1343,10 @@ outerr:
 									break;
 								case 3:	s = sp->toffset|REL_BR;
 									break;
-								case 4:	// la lui part
+								case 4:	/* la lui part */
 									s = sp->toffset|REL_LUI;
 									break;
-								case 5:	// la add part
+								case 5:	/* la add part */
 									s = sp->toffset|REL_ADD;
 									break;
 								}
@@ -1257,7 +1357,7 @@ outerr:
 					}
 				}	
 				fflush(fout);
-				fseek(fout, (sym_count+1)*sizeof(n), SEEK_CUR);
+				fseek(fout, (sym_count+1)*sizeof(n), 1);
 				string_offset = 0;
 				i = strlen(in_name)+1;
 				if (fwrite(in_name, i, 1, fout) != 1) goto outerr;
@@ -1269,9 +1369,9 @@ outerr:
 					if (fwrite(sp->name, l, 1, fout) != 1) goto outerr;
 				}
 				fflush(fout);
-				fseek(fout, -(sym_count+1)*sizeof(n), SEEK_CUR);
+				fseek(fout, -(sym_count+1)*sizeof(n), 1);
 				
-				n.n_un.n_strx = 0;	// file name
+				n.n_un.n_strx = 0;	/* file name */
 				n.n_type = N_FN;
 				n.n_ovly = 0;
 				n.n_value = 0;
@@ -1297,6 +1397,7 @@ outerr:
 				fprintf(stderr, "Can't open output file '%s'\n", out_name);
 				errs++;
 			}
+#endif
 		} else {
 			fprintf(stderr, "no output\n");
 			errs++;

@@ -1,4 +1,4 @@
-%token t_la t_lr t_value t_sp t_epc t_csr t_s0 t_s1 t_a0 t_a1 t_a2 t_a3 t_a4 t_a5 t_and t_or t_xor t_sub t_add t_mv t_nop t_inv t_ebreak t_jalr t_jr t_lw t_lb t_sw t_sb t_lea t_lui t_li t_beqz t_bnez t_bltz t_bgez t_j t_jal t_sll t_srl t_sra t_word t_name t_nl t_mul t_mulhi t_mmu t_addb t_addbu t_syscall t_stmp t_swapsp t_shl t_shr t_zext t_sext t_ldio t_stio t_flush t_dcache t_icache t_ret t_swap t_addpc t_div t_invmmu t_text t_data t_bss t_byte t_extern t_space t_num_label
+%token t_la t_lr t_value t_sp t_epc t_csr t_s0 t_s1 t_a0 t_a1 t_a2 t_a3 t_a4 t_a5 t_and t_or t_xor t_sub t_add t_mv t_nop t_inv t_ebreak t_jalr t_jr t_lw t_lb t_sw t_sb t_lea t_lui t_li t_beqz t_bnez t_bltz t_bgez t_j t_jal t_sll t_srl t_sra t_word t_name t_nl t_mul t_mulhi t_mmu t_addb t_addbu t_syscall t_stmp t_swapsp t_shl t_shr t_zext t_sext t_ldio t_stio t_flush t_dcache t_icache t_ret t_swap t_addpc t_div t_invmmu t_text t_data t_bss t_byte t_extern t_space t_num_label t_global t_string t_stringv t_align
 %start  program
 %%
 
@@ -119,8 +119,8 @@ ins:		t_and  rm ',' rm 	{ $$ = 0x8c61|($2<<7)|($4<<2); }
 	|	t_bnez	rm ',' t_name	{ $$ = 0xe001 | ($2<<7); ref_label($4, 3, 0); }
 	|	t_bltz	rm ',' t_name	{ $$ = 0xe003 | ($2<<7); ref_label($4, 3, 0); }
 	|	t_bgez	rm ',' t_name	{ $$ = 0xc003 | ($2<<7); ref_label($4, 3, 0); }
-	|	t_beqz	rm ',' t_num_label { $$ = 0xc001 | ($2<<7); ref_label($4, 7, 0); }
-	|	t_bnez	rm ',' t_num_label { $$ = 0xe001 | ($2<<7); ref_label($4, 7, 0); }
+	|	t_beqz	rm ',' t_num_label { $$ = 0xc001 | ($2<<7) | ref_label($4, 7, 0); }
+	|	t_bnez	rm ',' t_num_label { $$ = 0xe001 | ($2<<7) | ref_label($4, 7, 0); }
 	|	t_bltz	rm ',' t_num_label { $$ = 0xe003 | ($2<<7) | ref_label($4, 7, 0); }
 	|	t_bgez	rm ',' t_num_label { $$ = 0xc003 | ($2<<7) | ref_label($4, 7, 0); }
 	|	t_j	t_name		{ $$ = 0xa001; ref_label($2, 2, 0); }
@@ -155,24 +155,30 @@ label:		t_name ':'		{ declare_label(0, $1); }
 	|	t_value ':'		{ declare_label(1, $1); }
 	;
 
-in:		ins			{ emit($1); }
-	|	'.' t_space exp		{ emit_space($3); }
-	|	'.' t_byte exp		{ emit_data(0, $3); }
+inw:		ins			{ emit($1); }
 	|	'.' t_word exp		{ emit_data(1, $3); }
 	|	'.' t_word t_name 	{ ref_label($3, 1, 0); emit_data(1, 0); }
 	|	'.' t_word t_name '+' exp { ref_label($3, 1, 0); emit_data(1, $5); }
+	|	'.' t_align		{ align(); }
+	;
+inb:		'.' t_space exp		{ emit_space($3); }
+	|	'.' t_byte exp		{ emit_data(0, $3); }
+	|	'.' t_string t_stringv	{ emit_string(); }
 	;
 		
 
 line:		label t_nl 		
-	|	label in t_nl	
-	|	in t_nl		
+	|	label inb t_nl	
+	|	label inw t_nl	
+	|	      inb t_nl		
+	|	      inw t_nl		
 	|	'.' '=' exp t_nl	{ set_offset(0, $3); }
 	|	'.' '=' '.' '+' exp t_nl{ set_offset(1, $5); }
 	|	'.' t_text t_nl		{ set_seg(0); }
 	|	'.' t_data t_nl		{ set_seg(1); }
 	|	'.' t_bss t_nl		{ set_seg(2); }
 	|	'.' t_extern t_name t_nl{ set_extern($3); }
+	|	'.' t_global t_name t_nl{ set_global($3); }
 	|	t_nl
 	;
 

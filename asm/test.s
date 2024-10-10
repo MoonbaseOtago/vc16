@@ -68,7 +68,7 @@ fl:		flush	(a1)	// flush dcache data
 	flush	dcache	// flush dcache tags
 
 	li	a0, 0
-	li	a1, 0x00 // spi base
+	li	a1, 0x00 // qspi base
 	stio	a0, 6(a1) // turn off rom
 
 	flush  icache	// flush icache tags
