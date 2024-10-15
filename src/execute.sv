@@ -92,7 +92,7 @@ module execute(input clk, input reset,
 	assign inv_mmu = (do_inv_mmu?imm[3:0]:0);
 
 
-	wire link = ((br&&cond[2]&&(rd==1))||jmp)&cond[0];
+	wire link = (br&&cond[2])||jmp)&cond[0];
 
 
 	reg [RV-1:0]r1, r2, r1reg, r2reg;
