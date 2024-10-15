@@ -1,4 +1,4 @@
-%token t_la t_lr t_value t_sp t_epc t_csr t_s0 t_s1 t_a0 t_a1 t_a2 t_a3 t_a4 t_a5 t_and t_or t_xor t_sub t_add t_mv t_nop t_inv t_ebreak t_jalr t_jr t_lw t_lb t_sw t_sb t_lea t_lui t_li t_beqz t_bnez t_bltz t_bgez t_j t_jal t_sll t_srl t_sra t_word t_name t_nl t_mul t_mulhi t_mmu t_addb t_addbu t_syscall t_stmp t_swapsp t_shl t_shr t_zext t_sext t_ldio t_stio t_flush t_dcache t_icache t_ret t_swap t_addpc t_div t_invmmu t_text t_data t_bss t_byte t_extern t_space t_num_label t_global t_string t_stringv t_align
+%token t_la t_lr t_value t_sp t_epc t_csr t_s0 t_s1 t_a0 t_a1 t_a2 t_a3 t_a4 t_a5 t_and t_or t_xor t_sub t_add t_mv t_nop t_inv t_ebreak t_jalr t_jr t_lw t_lb t_sw t_sb t_lea t_lui t_li t_beqz t_bnez t_bltz t_bgez t_j t_jal t_sll t_srl t_sra t_word t_name t_nl t_mul t_mulhi t_mmu t_addb t_addbu t_syscall t_stmp t_swapsp t_shl t_shr t_zext t_sext t_ldio t_stio t_flush t_dcache t_icache t_ret t_swap t_addpc t_div t_invmmu t_text t_data t_bss t_byte t_extern t_space t_num_label t_global t_string t_stringv t_align t_r0 t_r1 t_r2 t_r3 t_r4 t_r5 t_r6 t_r7 t_x0 t_jfar t_jalfar
 %start  program
 %%
 
@@ -32,7 +32,8 @@ xr:		rm 			{ $$ = 8|$1; }
 	|	rx			{ $$ = $1; }
 	;
 
-rx: 		t_lr			{ $$ = 1; }
+rx: 		t_x0			{ $$ = 0; }
+	|	t_lr			{ $$ = 1; }
 	|	t_epc			{ $$ = 3; }
 	|	t_csr			{ $$ = 4; }
 	|	t_mmu			{ $$ = 5; }
@@ -50,6 +51,14 @@ rm:		t_s0 			{ $$ = 0; }
 	|	t_a3			{ $$ = 5; }
 	|	t_a4			{ $$ = 6; }
 	|	t_a5			{ $$ = 7; }
+	|	t_r0 			{ $$ = 0; }
+	|	t_r1 			{ $$ = 1; }
+	|	t_r2			{ $$ = 2; }
+	|	t_r3			{ $$ = 3; }
+	|	t_r4			{ $$ = 4; }
+	|	t_r5			{ $$ = 5; }
+	|	t_r6			{ $$ = 6; }
+	|	t_r7			{ $$ = 7; }
 	;
 
 ins:		t_and  rm ',' rm 	{ $$ = 0x8c61|($2<<7)|($4<<2); }      
@@ -123,9 +132,26 @@ ins:		t_and  rm ',' rm 	{ $$ = 0x8c61|($2<<7)|($4<<2); }
 	|	t_bnez	rm ',' t_num_label { $$ = 0xe001 | ($2<<7) | ref_label($4, 7, 0); }
 	|	t_bltz	rm ',' t_num_label { $$ = 0xe003 | ($2<<7) | ref_label($4, 7, 0); }
 	|	t_bgez	rm ',' t_num_label { $$ = 0xc003 | ($2<<7) | ref_label($4, 7, 0); }
-	|	t_j	t_name		{ $$ = 0xa001; ref_label($2, 2, 0); }
-	|	t_jal	t_name		{ $$ = 0x2001; ref_label($2, 2, 0); }
-	|	t_jal	t_name '(' t_li ')'{ $$ = 0x8000; ref_label($2, 9, 0); }
+	|	t_j	t_name		{ if (!is_global($2)) {$$ = 0xa001; ref_label($2, 2, 0); } else {
+						ref_label($2, 8, 0);
+						emit(0x6001|(1<<7));  /* li lr, X */
+						$$ = 0xa000;	      /* jr X(lr) */
+					}}
+	|	t_jfar	t_name		{ 
+						ref_label($2, 8, 0);
+						emit(0x6001|(1<<7));  /* li lr, X */
+						$$ = 0xa000;	      /* jr X(lr) */
+					}
+	|	t_jal	t_name		{ if (!is_global($2)) { $$ = 0x2001; ref_label($2, 2, 0);} else {
+						ref_label($2, 8, 0);
+						emit(0x6001|(1<<7));  /* li lr, X */
+						$$ = 0x8000;	      /* jalr X(lr) */
+					} }
+	|	t_jalfar t_name		{ 
+						ref_label($2, 8, 0);
+						emit(0x6001|(1<<7));  /* li lr, X */
+						$$ = 0x8000;	      /* jalr X(lr) */
+					}
 	|	t_j	t_num_label	{ $$ = 0xa001| ref_label($2, 6, 0); }
 	|	t_jal	t_num_label	{ $$ = 0x2001| ref_label($2, 6, 0); }
 	|	t_sll	rm ',' rm	{ $$ = 0x1002 | ($2<<7) | ($4<<2); }
@@ -134,8 +160,8 @@ ins:		t_and  rm ',' rm 	{ $$ = 0x8c61|($2<<7)|($4<<2); }
 	|	t_srl	rm ',' exp 	{ $$ = 0x8001 | ($2<<7) | shift_exp($4); }
 	|	t_sra	rm ',' rm	{ $$ = 0x9401 | ($2<<7) | ($4<<2); }
 	|	t_sra	rm ',' exp	{ $$ = 0x8401 | ($2<<7) | shift_exp($4); }
-	|	t_la	rm ',' t_name 	{ ref_label($4, 4, 0); emit(0x6001|((8|$2)<<7)); $$ = 0x0001 | ($2<<7); ref_label($4, 5, 0); }
-	|	t_la	rm ',' t_name '+' exp 	{ ref_label($4, 4, $6); emit(0x6001|((8|$2)<<7)); $$ = 0x0001 | ($2<<7); ref_label($4, 5, $6); }
+	|	t_la	rm ',' t_name 	{ ref_label($4, 4, 0); emit(0x6001|((8|$2)<<7)); $$ = 0x0001 | ($2<<7);  }
+	|	t_la	rm ',' t_name '+' exp 	{ ref_label($4, 4, $6); emit(0x6001|((8|$2)<<7)); $$ = 0x0001 | ($2<<7); }
 	|	t_ldio r ',' exp '(' rm ')'{ $$ = 0x4003|($6<<7)|roffIO($4)|(($2&7)<<2); chkr($2); }
 	|	t_ldio r ',' '(' rm ')'	{ $$ = 0x4003|($5<<7)|roffIO(0)|(($2&7)<<2); chkr($2); }
 	|	t_stio r ',' exp '(' rm ')'{ $$ = 0x2003|($6<<7)|roffIO($4)|(($2&7)<<2); chkr($2); }
@@ -158,7 +184,7 @@ label:		t_name ':'		{ declare_label(0, $1); }
 inw:		ins			{ emit($1); }
 	|	'.' t_word exp		{ emit_data(1, $3); }
 	|	'.' t_word t_name 	{ ref_label($3, 1, 0); emit_data(1, 0); }
-	|	'.' t_word t_name '+' exp { ref_label($3, 1, 0); emit_data(1, $5); }
+	|	'.' t_word t_name '+' exp { ref_label($3, 1, $5); emit_data(1, 0); }
 	|	'.' t_align		{ align(); }
 	;
 inb:		'.' t_space exp		{ emit_space($3); }

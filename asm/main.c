@@ -78,9 +78,9 @@ struct num_ref *num_ref_first=0;
 
 #define YYDEBUG 1
 
-unsigned short text[4096];
+unsigned short text[8192];
 unsigned int text_size = 0;
-unsigned short data[4096];
+unsigned short data[8192];
 unsigned int data_size = 0;
 unsigned int bss_size = 0;
 unsigned char seg=0;
@@ -103,6 +103,7 @@ unsigned ref_label(/*int ind, int type, int offset*/);
 void set_extern(/*int ind*/);
 void set_global(/* int */);
 void align();
+int is_global(/* int */);
 
 int
 shift_exp(r)
@@ -394,7 +395,9 @@ static struct tab reserved[] = {
 	"invmmu", t_invmmu,
 	"j", t_j,
 	"jal", t_jal,
+	"jalfar", t_jalfar,
 	"jalr", t_jalr,
+	"jfar", t_jfar,
 	"jr", t_jr,
  	"la", t_la,
 	"lb", t_lb,
@@ -411,6 +414,14 @@ static struct tab reserved[] = {
 	"mv", t_mv,
 	"nop", t_nop,
 	"or", t_or,
+	"r0", t_r0,
+	"r1", t_r1,
+	"r2", t_r2,
+	"r3", t_r3,
+	"r4", t_r4,
+	"r5", t_r5,
+	"r6", t_r6,
+	"r7", t_r7,
 	"ret", t_ret,
 	"s0", t_s0,
 	"s1", t_s1,
@@ -431,10 +442,22 @@ static struct tab reserved[] = {
 	"syscall", t_syscall,
 	"text", t_text,
 	"word", t_word,
+	"x0", t_x0,
 	"xor", t_xor,
 	"zext", t_zext,
 	0, 0
 };
+
+
+struct symbol *find_symbol(ind)
+int ind;
+{
+	struct symbol *sp;
+	for (sp = list; sp; sp = sp->next) 
+	if (sp->index == ind) 
+		return sp;
+	return 0;
+}
 
 
 void
@@ -445,6 +468,7 @@ int type, ind;
 	if (type) {
 		struct num_label *sp;
 		struct num_ref *rp, *trp;
+
 		for (sp = num_first; sp; sp = sp->next) 
 		if (sp->index == ind) {
 use:
@@ -508,8 +532,9 @@ use:
 		goto use;
 	} else {
 		struct symbol *sp;
-		for (sp = list; sp; sp = sp->next) 
-		if (sp->index == ind) {
+
+		sp = find_symbol(ind);
+		if (sp) {
 			if (sp->found) {
 				errs++;
 				fprintf(stderr, "%d: label '%s' declared twice\n", line, sp->name);
@@ -532,8 +557,9 @@ set_extern(ind)
 int ind;
 {
 	struct symbol *sp;
-	for (sp = list; sp; sp = sp->next) 
-	if (sp->index == ind) {
+
+	sp = find_symbol(ind);
+	if (sp) {
 		sp->type = N_EXT|N_UNDF;
 		return;
 	}
@@ -545,16 +571,37 @@ set_global(ind)
 int ind;
 {
 	struct symbol *sp;
-	for (sp = list; sp; sp = sp->next) 
-	if (sp->index == ind) {
+
+	sp = find_symbol(ind);
+	if (sp) {
 		sp->type |= N_EXT;
 		return;
 	}
 	assert(1);
 }
-void set_global(/* int */);
 
+int
+is_global(ind)
+int ind;
+{
+	struct symbol *sp;
+	sp = find_symbol(ind);
+	if (sp && sp->type&N_EXT)
+		return 1;
+	return 0;
+}
 
+/*
+ * type:
+ * 	1 - .word ref+offset (offset already in memory) - resolved by linker for a.out
+ *	2 - j label/jal label - to local label (resolved in this file)
+ *	3 - branch to local label
+ *	4 - la r, X+i (lui r, X+i, addi r, X+i) - resolved by linker for a.out - i stored in opcodes
+ *	5 - (going away - second half of 4)
+ *	6 - j label/jal label - to local numbered label (resolved in this file)
+ *	7 - branch to local numbered label
+ *	8 - j label/jal label - to global label, (done with lui li,x, j/jal x(li) )  - resolved by linker for a.out
+ */
 unsigned
 ref_label(ind, type, offset)
 int ind, type, offset;
@@ -652,7 +699,7 @@ void align()
 {
 	switch (seg) {
 	case 0: if (text_size&1) text_size++; break;
-	case 1: if (data_size&1) text_size++; break;
+	case 1: if (data_size&1) data_size++; break;
 	case 2: if (bss_size&1) bss_size++; break;
 	}
 }
@@ -1132,7 +1179,7 @@ char **argv;
 			} else 
 			switch (rp->type) {
 			case 1:
-				text[rp->offset>>1] += sp->offset;
+				text[rp->offset>>1] = (aout?0:sp->offset)+rp->extra;
 				break;
 			case 2:	/* jmp */
 				delta = sp->offset-rp->offset;
@@ -1155,7 +1202,7 @@ char **argv;
 				}
 				break;
 			case 4:	/* la lui part */
-				delta = sp->offset+rp->extra;
+				delta = (aout?0:sp->offset)+rp->extra;
 				if (sizeof(int) > 2 && delta >= (1<<15)) {
 					errs++;
 					fprintf(stderr, "%d: '%s' la too far\n", rp->line, sp->name);
@@ -1167,12 +1214,30 @@ char **argv;
 					}
 					text[rp->offset>>1] |= luioff(delta, rp->line);
 				}
-				break;
-			case 5:	/* la add part */
-				delta = (sp->offset+rp->extra)&0xff;
+				/* la add part */
+				delta = ((aout?0:sp->offset)+rp->extra)&0xff;
 				if (delta&0x80) 
 					delta = -(0x100-delta);
-				text[rp->offset>>1] |= imm8(delta, rp->line);
+				text[(rp->offset>>1)+1] |= imm8(delta, rp->line);
+				break;
+			case 8:	/* jal lui li part */
+				delta = (aout?0:sp->offset)+rp->extra;
+				if (sizeof(int) > 2 && delta >= (1<<15)) {
+					errs++;
+					fprintf(stderr, "%d: '%s' la too far\n", rp->line, sp->name);
+				} else {
+					if (delta&0x80) {
+						delta = (delta&~0xff)+0x100;
+					} else {
+						delta = delta&~0xff;
+					}
+					text[rp->offset>>1] |= luioff(delta, rp->line);
+				}
+				/* la jr  X(li)  part */
+				delta = ((aout?0:sp->offset)+rp->extra)&0xff;
+				if (delta&0x80) 
+					delta = -(0x100-delta);
+				text[(rp->offset>>1)+1] |= imm8(delta, rp->line);
 				break;
 			}
 		}
