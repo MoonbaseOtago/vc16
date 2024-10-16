@@ -34,6 +34,9 @@ sys_trap:
 	lw	a2, (a2)
 	jr	a2
 
+fred:	li 	a0, 123
+	ret
+
 send:	stio	a0, 2(a5)
 sn1:		ldio	a0, 4(a5)
 		and	a0, 1
@@ -368,12 +371,12 @@ lp1:
 
 	li 	s1, 0x14
 	li	a0, 1
-	la	s0, r1
+	la	s0, xr1
 	or	s0, a0
 	mv	epc, s0
 	jr	epc
 xx1:	j	xx1
-r1:
+xr1:
 	mv	a0, s1
 	jal     send            // 14
 	swap	a0, s1
@@ -385,7 +388,7 @@ r1:
 	swap	a0, s1
 	jal     send            // 00
 	
-	la      s0, r2
+	la      s0, xr2
 	mv	epc, s0
 	jr	epc
 	j	xx1
@@ -402,13 +405,13 @@ syscall1:
 	jr	epc
 
 
-r2:
+xr2:
 	la	a0, syscall1
 	la	a1, syscall_vector
 	sw	a0, (a1)
 
 sc:	syscall					// goes to syscall1
-r3:	li	a0, 0x1a	
+	li	a0, 0x1a	
 	jal     send            // 1a
 	//mv	a0, csr
 	//jal	send		// 80
@@ -1067,6 +1070,12 @@ int4:	li	a0, 0
 	j	fail
 
 1:	jal     sendx
+
+
+
+	li	a0, 88
+far:	jalfar	fred
+farx:	jal     sendx
 
 
 	j	fail

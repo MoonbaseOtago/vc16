@@ -20,17 +20,67 @@
 #endif
 
 /*
- *	relocation data 1 word/word of text/data
+ *	We have 5 types of relocation:
+ *
+ *	0000	Absolute
+ *	0010	relative to the current text segment (offset stored in target)
+ *	0100	relative to the current data segment (offset stored in target)
+ *	0110	relative to the current bss segment (offset stored in target)
+ *	1000	unknown external reference (includes a symbol offset)
+ *
+ *	We have 3 types of target:
+ *					word 0		word 1
+ *	A	.word 	address+N	N		-
+ *	B	la   	address+N	lui R, N	add  R, N
+ *	C	j/jal   address+N	lui lr, N	j/jal N(ri)
+ *
+ *	There are 3x5=15 combinations - no obvious bit encoding so we do:
+ *
+ *	0000	ABS A
+ *	0001	ABS B
+ *	0010	TEXT A
+ *	0011	TEXT B
+ *	0100	DATA A
+ *	0101	DATA B
+ *	0110	BSS A
+ *	0111	BSS B
+ *	1000	EXTERN A
+ *	1001	EXTERN B
+ *	1010	TEXT C
+ *	1011	ABS C
+ *	1100	DATA C
+ *	1101	EXTERN C
+ *	1110	BSS C
+ *      1111	-
  */
 
-#define REL_ABS 	0
-#define		REL_TEXT	0
-#define		REL_DATA	1
-#define 	REL_REL 	2
-#define REL_BR 		4
-#define REL_JMP 	5
-#define REL_LUI 	6
-#define REL_ADD 	10
+#define	REL_A	0x0
+#define	REL_B	0x1
+#define	REL_C	0x2
+
+#define	IS_A(x)	(((x)&0xf) <= 8 && !((x)&1))
+#define	IS_B(x)	(((x)&0xf) <= 9 && ((x)&1))
+#define	IS_C(x)	(((x)&0xf) > 9)
+
+#define REL_X(x) (IS_C(x)?REL_C:IS_B(x)?REL_B:REL_A)
+
+#define	REL_ABS		0x0
+#define	REL_TEXT	0x1
+#define	REL_DATA	0x2
+#define	REL_BSS		0x3
+#define	REL_EXTERN	0x4
+
+#define	IS_ABS(x) (((x)&0xf) <= 1 || ((x)&0xf)==0xb) 
+#define	IS_TEXT(x) (((x)&0xe) == 0x2 || ((x)&0xf)==0xa) 
+#define	IS_DATA(x) (((x)&0xe) == 0x4 || ((x)&0xf)==0xc) 
+#define	IS_BSS(x) (((x)&0xe) == 0x6 || ((x)&0xf)==0xe) 
+#define	IS_EXTERN(x) (((x)&0xe) == 0x8 || ((x)&0xf)==0xd) 
+
+#define REL_TYPE(x) (IS_ABS(x)?REL_ABS:IS_TEXT(x)?REL_TEXT:IS_DATA(x)?REL_DATA:IS_BSS(x)?REL_BSS:REL_EXTERN)
+
+#define REL_SYMBOL(x) ((x)>>4)
+
+#define MAKE_REL(symbol, x, type) (((symbol)<<4)|((type)!=REL_C?((type)<<1)|(x):(x)==REL_ABS?0xb:(x)==REL_EXTERN?0xd:0x8|((type)<<1)))
 
 struct symbol {
 	char *name;
@@ -397,7 +447,6 @@ static struct tab reserved[] = {
 	"jal", t_jal,
 	"jalfar", t_jalfar,
 	"jalr", t_jalr,
-	"jfar", t_jfar,
 	"jr", t_jr,
  	"la", t_la,
 	"lb", t_lb,
@@ -1172,37 +1221,52 @@ char **argv;
 		for (sp = list; sp; sp=sp->next) 
 		if (rp->index == sp->index) {
 			int v, delta;
+			unsigned short *t;
 			found = 1;
-			if (!sp->found) {
+			switch (rp->seg) {
+			case 0:	t = text; break;
+			case 1:	t = data; break;
+			default: fprintf(stderr, "%d: '%s' not defined\n", rp->line, sp->name);
+				errs++;
+				t = text;
+				break;
+			}
+			
+			if ((!aout || sp->type != (N_EXT|N_UNDF)) && !sp->found) {
+notdef:
 				errs++;
 				fprintf(stderr, "%d: '%s' not defined\n", rp->line, sp->name);
 			} else 
 			switch (rp->type) {
 			case 1:
-				text[rp->offset>>1] = (aout?0:sp->offset)+rp->extra;
+				t[rp->offset>>1] = (aout&&(sp->type == (N_EXT|N_UNDF))?0:sp->offset)+rp->extra;
 				break;
 			case 2:	/* jmp */
+				if (sp->type == (N_EXT|N_UNDF))
+					goto notdef;
 				delta = sp->offset-rp->offset;
 				if (delta < -(1<<10) || delta >= (1<<10)) {
 					errs++;
 					fprintf(stderr, "%d: '%s' jmp too far\n", rp->line, sp->name);
 				} else {
 					v = (((delta>>1)&7)<<3) | (((delta>>4)&1)<<11) | (((delta>>5)&1)<<2) | (((delta>>6)&1)<<7) | (((delta>>7)&1)<<6) | (((delta>>8)&3)<<9)| (((delta>>10)&1)<<8) | (((delta>>11)&1)<<12);
-					text[rp->offset>>1] |= v;
+					t[rp->offset>>1] |= v;
 				}
 				break;
 			case 3:	/* branch */
+				if (sp->type == (N_EXT|N_UNDF))
+					goto notdef;
 				delta = sp->offset-rp->offset;
 				if (delta < -(1<<6) || delta >= (1<<6)) {
 					errs++;
 					fprintf(stderr, "%d: '%s' branch too far\n", rp->line, sp->name);
 				} else {
 					v = (((delta>>1)&3)<<3) | (((delta>>3)&3)<<10) | (((delta>>5)&1)<<2) | (((delta>>6)&3)<<5) | (((delta>>8)&1)<<12);
-					text[rp->offset>>1] |= v;
+					t[rp->offset>>1] |= v;
 				}
 				break;
 			case 4:	/* la lui part */
-				delta = (aout?0:sp->offset)+rp->extra;
+				delta = (aout&&(sp->type == (N_EXT|N_UNDF))?0:sp->offset)+rp->extra;
 				if (sizeof(int) > 2 && delta >= (1<<15)) {
 					errs++;
 					fprintf(stderr, "%d: '%s' la too far\n", rp->line, sp->name);
@@ -1212,16 +1276,16 @@ char **argv;
 					} else {
 						delta = delta&~0xff;
 					}
-					text[rp->offset>>1] |= luioff(delta, rp->line);
+					t[rp->offset>>1] |= luioff(delta, rp->line);
+					/* la add part */
+					delta = ((aout&&(sp->type == (N_EXT|N_UNDF))?0:sp->offset)+rp->extra)&0xff;
+					if (delta&0x80) 
+						delta = -(0x100-delta);
+					t[(rp->offset>>1)+1] |= imm8(delta, rp->line);
 				}
-				/* la add part */
-				delta = ((aout?0:sp->offset)+rp->extra)&0xff;
-				if (delta&0x80) 
-					delta = -(0x100-delta);
-				text[(rp->offset>>1)+1] |= imm8(delta, rp->line);
 				break;
 			case 8:	/* jal lui li part */
-				delta = (aout?0:sp->offset)+rp->extra;
+				delta = (aout&&(sp->type == (N_EXT|N_UNDF))?0:sp->offset)+rp->extra;
 				if (sizeof(int) > 2 && delta >= (1<<15)) {
 					errs++;
 					fprintf(stderr, "%d: '%s' la too far\n", rp->line, sp->name);
@@ -1231,13 +1295,17 @@ char **argv;
 					} else {
 						delta = delta&~0xff;
 					}
-					text[rp->offset>>1] |= luioff(delta, rp->line);
+					t[rp->offset>>1] |= luioff(delta, rp->line);
+					/* la jr  X(li)  part */
+					delta = ((aout&&(sp->type == (N_EXT|N_UNDF))?0:sp->offset)+rp->extra)&0xff;
+					if (delta&0x80) 
+						delta = -(0x100-delta);
+					if (delta&1) {
+						errs++;
+						fprintf(stderr, "%d: '%s' jump to odd address\n", rp->line, sp->name);
+					} else
+					t[(rp->offset>>1)+1] |= imm8(delta, rp->line);
 				}
-				/* la jr  X(li)  part */
-				delta = ((aout?0:sp->offset)+rp->extra)&0xff;
-				if (delta&0x80) 
-					delta = -(0x100-delta);
-				text[(rp->offset>>1)+1] |= imm8(delta, rp->line);
 				break;
 			}
 		}
@@ -1286,14 +1354,6 @@ char **argv;
 			FILE *fout = fopen(out_name, "wb");
 			if (fout) {
 #ifdef NOTDEF
-#define REL_ABS 	0
-#define		REL_TEXT	0
-#define		REL_DATA	1
-#define 	REL_REL 	2
-#define REL_BR 		4
-#define REL_JMP 	5
-#define REL_LUI 	6
-#define REL_ADD 	10
 struct	exec {
 		int	      a_magic;	    /* magic number */
 		unsigned int  a_text;	    /* size of text segment */
@@ -1354,38 +1414,35 @@ outerr:
 							for (sp = list; sp; sp=sp->next) 
 							if (rp->index == sp->index) {
 								switch (rp->type) {
-								case 1: 
-									if (!sp->found) {
-										s = REXT|(sp->toffset<<4);
-									} else
-									switch (sp->type) {
-									case 0: s = RTEXT; break;
-									case 1: s = RDATA; break;
-									case 2: s = RBSS; break;
+								case 1: /* .word v */
+									if (sp->type == (REXT|UNDF)) {
+										s = MAKE_REL(sp->toffset, REL_A, REL_EXTERN); 
+									} else {
+										switch (sp->seg) {
+										case 0: s = MAKE_REL(0, REL_A, REL_TEXT); break;
+										case 1: s = MAKE_REL(0, REL_A, REL_DATA); break;
+										case 2: s = MAKE_REL(0, REL_A, REL_BSS); break;
 									}
 									break;
-								case 2:	break;
-								case 3:	break;
-								case 4:	/* la lui part */
-									if (!sp->found) {
-										s = REXT|(sp->toffset<<4)|1;
-									} else
-									switch (sp->type) {
-									case 0: s = RTEXT|1; break;
-									case 1: s = RDATA|1; break;
-									case 2: s = RBSS|1; break;
+								case 4:	/* la r, addr */
+									if (sp->type == (REXT|UNDF)) {
+										s = MAKE_REL(sp->toffset, REL_B, REL_EXTERN); 
+									} else {
+										switch (sp->seg) {
+										case 0: s = MAKE_REL(0, REL_B, REL_TEXT); break;
+										case 1: s = MAKE_REL(0, REL_B, REL_DATA); break;
+										case 2: s = MAKE_REL(0, REL_B, REL_BSS); break;
 									}
 									break;
-								case 5:	/* la add part */
-									if (!sp->found) {
-										s = REXT|(sp->toffset<<4)|RBSS|1;
-									} else
-									switch (sp->type) {
-									case 0: s = RTEXT|(1<<4)1; break;
-									case 1: s = RDATA|(1<<4)1; break;
-									case 2: s = RBSS|(1<<4)1; break;
+								case 8:	/* jal li, addr */
+									if (sp->type == (REXT|UNDF)) {
+										s = MAKE_REL(sp->toffset, REL_C, REL_EXTERN); 
+									} else {
+										switch (sp->seg) {
+										case 0: s = MAKE_REL(0, REL_C, REL_TEXT); break;
+										case 1: s = MAKE_REL(0, REL_C, REL_DATA); break;
+										case 2: s = MAKE_REL(0, REL_C, REL_BSS); break;
 									}
-									break;
 								}
 								break;
 							}
@@ -1402,18 +1459,35 @@ outerr:
 							for (sp = list; sp; sp=sp->next) 
 							if (rp->index == sp->index) {
 								switch (rp->type) {
-								case 1: s = sp->toffset|REL_ABS;
+								case 1: /* .word v */
+									if (sp->type == (REXT|UNDF)) {
+										s = MAKE_REL(sp->toffset, REL_A, REL_EXTERN); 
+									} else {
+										switch (sp->seg) {
+										case 0: s = MAKE_REL(0, REL_A, REL_TEXT); break;
+										case 1: s = MAKE_REL(0, REL_A, REL_DATA); break;
+										case 2: s = MAKE_REL(0, REL_A, REL_BSS); break;
+									}
 									break;
-								case 2:	s = sp->toffset|REL_JMP;
+								case 4:	/* la r, addr */
+									if (sp->type == (REXT|UNDF)) {
+										s = MAKE_REL(sp->toffset, REL_B, REL_EXTERN); 
+									} else {
+										switch (sp->seg) {
+										case 0: s = MAKE_REL(0, REL_B, REL_TEXT); break;
+										case 1: s = MAKE_REL(0, REL_B, REL_DATA); break;
+										case 2: s = MAKE_REL(0, REL_B, REL_BSS); break;
+									}
 									break;
-								case 3:	s = sp->toffset|REL_BR;
-									break;
-								case 4:	/* la lui part */
-									s = sp->toffset|REL_LUI;
-									break;
-								case 5:	/* la add part */
-									s = sp->toffset|REL_ADD;
-									break;
+								case 8:	/* jal li, addr */
+									if (sp->type == (REXT|UNDF)) {
+										s = MAKE_REL(sp->toffset, REL_C, REL_EXTERN); 
+									} else {
+										switch (sp->seg) {
+										case 0: s = MAKE_REL(0, REL_C, REL_TEXT); break;
+										case 1: s = MAKE_REL(0, REL_C, REL_DATA); break;
+										case 2: s = MAKE_REL(0, REL_C, REL_BSS); break;
+									}
 								}
 							}
 							rp = rp->next;

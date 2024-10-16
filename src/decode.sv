@@ -140,9 +140,10 @@ module decode(input clk, input reset,
 						c_br = 1;
 						c_cond = 3'b1x1;
 						c_op = `OP_ADD;
-						c_imm = {{(RV-11){ins[12]}}, ins[8], ins[10:9], ins[6],ins[7],ins[2],ins[11],ins[5:3],1'b0};			
+						c_imm = {{(RV-7){ins[4]}}, ins[3:2],  ins[12:10], ins[6], 1'b0};
 						c_rd = 1;
 						c_rs1 = 1;
+						c_trap = (|ins[9:7])|ins[5];
 					end
 			3'b110: begin 	// sw
 						c_store = 1;
