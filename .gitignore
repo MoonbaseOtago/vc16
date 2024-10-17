@@ -12,6 +12,7 @@ test/gate_level_netlist.v
 asm/a.out
 asm/vc.tab.c
 asm/vcasm
+asm/cvt
 asm/*.bin
 bsd
 test/vcd_autosave.sav

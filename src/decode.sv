@@ -255,6 +255,13 @@ module decode(input clk, input reset,
 						c_imm = {{(RV-6){1'b0}}, ins[2], ins[12], ins[4:3], ins[6:5]};
 						c_needs_rs2 = ins[12]; c_trap = !ins[12]?ins[2]:(ins[6:5]!=0);
 					end
+			3'b001:	begin	// addi (rx)
+						c_op = `OP_ADD;
+						c_rs1 = {1'b0, ins[9:7]};
+						c_rd = {1'b0, ins[9:7]};
+						c_imm = {{(RV-7){ins[4]}}, ins[3:2],  ins[12:10], ins[6:5]};
+						c_trap = !supmode && (c_rd >= 4'b0011 && c_rd <= 4'b0110);
+					end
 			3'b010:	begin	// lwsp  **
 						c_load = 1;
 						c_cond = 3'bxx0;

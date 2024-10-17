@@ -80,6 +80,8 @@ ins:		t_and  rm ',' rm 	{ $$ = 0x8c61|($2<<7)|($4<<2); }
 	|	t_add  t_sp ',' r       { $$ = 0x8002|(2<<7)|($4<<2); } 
 	|	t_add  rm ',' exp	{ $$ = 0x0001|($2<<7)|imm8($4, 0); }
 	|	t_sub  rm ',' exp	{ $$ = 0x0001|($2<<7)|imm8(-$4, 0); }
+	|	t_add  rx ',' exp	{ $$ = 0x2002|($2<<7)|imm8($4, 0); }
+	|	t_sub  rx ',' exp	{ $$ = 0x2002|($2<<7)|imm8(-$4, 0); }
 	|	t_add  rm ',' r        	{ $$ = 0x9002|((8|$2)<<7)|($4<<2); } 
 	|	t_add  rx ',' r        	{ $$ = 0x9002|($2<<7)|($4<<2); } 
 	|	t_mv   r ',' r        	{ $$ = 0x8002|($2<<7)|($4<<2); } 
@@ -124,6 +126,19 @@ ins:		t_and  rm ',' rm 	{ $$ = 0x8c61|($2<<7)|($4<<2); }
                                         			delta = -(0x100-delta);
 							$$ = 0x0001 | ($2<<7) | imm8(delta, 0);
 						}}
+	|	t_li     rx ',' exp	{ 
+							int delta = $4;
+							if (delta&0x80) {
+                                                		delta = (delta&~0xff)+0x100;
+                                        		} else {
+                                                		delta = delta&~0xff;
+                                        		}
+						 	emit(0x6001|(($2)<<7)|luioff(delta, 0));
+							delta = ($4)&0xff;
+                                			if (delta&0x80)
+                                        			delta = -(0x100-delta);
+							$$ = 0x2002 | ($2<<7) | imm8(delta, 0);
+						}
 	|	t_beqz	rm ',' t_name	{ $$ = 0xc001 | ($2<<7); ref_label($4, 3, 0); }
 	|	t_bnez	rm ',' t_name	{ $$ = 0xe001 | ($2<<7); ref_label($4, 3, 0); }
 	|	t_bltz	rm ',' t_name	{ $$ = 0xe003 | ($2<<7); ref_label($4, 3, 0); }
@@ -153,6 +168,8 @@ ins:		t_and  rm ',' rm 	{ $$ = 0x8c61|($2<<7)|($4<<2); }
 	|	t_sra	rm ',' exp	{ $$ = 0x8401 | ($2<<7) | shift_exp($4); }
 	|	t_la	rm ',' t_name 	{ ref_label($4, 4, 0); emit(0x6001|((8|$2)<<7)); $$ = 0x0001 | ($2<<7);  }
 	|	t_la	rm ',' t_name '+' exp 	{ ref_label($4, 4, $6); emit(0x6001|((8|$2)<<7)); $$ = 0x0001 | ($2<<7); }
+	|	t_la	rx ',' t_name 	{ ref_label($4, 4, 0); emit(0x6001|(($2)<<7)); $$ = 0x2002 | ($2<<7);  }
+	|	t_la	rx ',' t_name '+' exp 	{ ref_label($4, 4, $6); emit(0x6001|(($2)<<7)); $$ = 0x2002 | ($2<<7); }
 	|	t_ldio r ',' exp '(' rm ')'{ $$ = 0x4003|($6<<7)|roffIO($4)|(($2&7)<<2); chkr($2); }
 	|	t_ldio r ',' '(' rm ')'	{ $$ = 0x4003|($5<<7)|roffIO(0)|(($2&7)<<2); chkr($2); }
 	|	t_stio r ',' exp '(' rm ')'{ $$ = 0x2003|($6<<7)|roffIO($4)|(($2&7)<<2); chkr($2); }
