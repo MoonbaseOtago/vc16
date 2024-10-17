@@ -28,8 +28,8 @@ VERILOG_SOURCES += $(PDK_ROOT)/sky130A/libs.ref/sky130_fd_sc_hd/verilog/primitiv
 VERILOG_SOURCES += $(PDK_ROOT)/sky130A/libs.ref/sky130_fd_sc_hd/verilog/sky130_fd_sc_hd.v
 
 # this gets copied in by the GDS action workflow
-#VERILOG_SOURCES += $(PWD)/gate_level_netlist.v
-VERILOG_SOURCES += /tmp/tt_um_vc32_cpu.pnl.v
+VERILOG_SOURCES += $(PWD)/gate_level_netlist.v
+#VERILOG_SOURCES += /tmp/tt_um_vc32_cpu.pnl.v
 
 endif
 
