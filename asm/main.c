@@ -3,20 +3,14 @@
 #include <string.h>
 #include <ctype.h>
 
-#include <stdlib.h>
 
 #ifdef BSD
 #include <sys/exec.h>
 #define _AOUT_INCLUDE_
 #include <nlist.h>
 #else
-#define N_TYPE	0x7
-#define N_UNDF	0x0
-#define N_ABS	0x1
-#define N_TEXT	0x2
-#define N_DATA	0x3
-#define N_BSS	0x4
-#define N_EXT	0x8
+#include <stdlib.h>
+#include <unistd.h>
 #endif
 
 /*
@@ -82,6 +76,61 @@
 
 #define MAKE_REL(symbol, x, type) (((symbol)<<4)|((type)!=REL_C?((type)<<1)|(x):(x)==REL_ABS?0xb:(x)==REL_EXTERN?0xd:0x8|((type)<<1)))
 
+#ifndef BSD
+struct	exec {
+		short	      a_magic;	    /* magic number */
+		unsigned short  a_text;	    /* size of text segment */
+		unsigned short  a_data;	    /* size of initialized data	*/
+		unsigned short  a_bss;	    /* size of uninitialized data */
+		unsigned short  a_syms;	    /* size of symbol table */
+		unsigned short  a_entry;	    /* entry point */
+		unsigned short  a_unused;	    /* not used	*/
+		unsigned short  a_flag;	    /* relocation info stripped	*/
+};
+struct	nlist {
+#ifdef	_AOUT_INCLUDE_
+	union {
+	      char *n_name;/* In memory	address	of symbol name */
+	      unsigned short n_strx;/* String table offset (file) */
+	} n_un;
+#else
+	union {
+		unsigned short n_strx;/* String table offset (file) */
+	} n_un;
+#endif
+	u_char	      n_type;	 /* Type of symbol - see below */
+	char	      n_ovly;	 /* Overlay number */
+	unsigned short	      n_value;	 /* Symbol value */
+};
+
+#define  A_MAGIC1      0407          /* normal */
+#define  A_MAGIC2      0410          /* read-only text */
+#define  A_MAGIC3      0411          /* separated I&D */
+#define  A_MAGIC4      0405          /* overlay */
+#define  A_MAGIC5      0430          /* auto-overlay (nonseparate) */
+#define  A_MAGIC6      0431          /* auto-overlay (separate) */
+
+/*
+ * Simple values for n_type.
+ */
+#define  N_UNDF        0x0        /* undefined */
+#define  N_ABS         0x1        /* absolute */
+#define  N_TEXT        0x2        /* text symbol */
+#define  N_DATA        0x3        /* data symbol */
+#define  N_BSS         0x4        /* bss symbol */
+#define  N_REG         0x14       /* register name */
+#define  N_FN          0x1f       /* file name symbol */
+
+#define  N_EXT         0x20       /* external bit, or'ed in */
+#define  N_TYPE        0x1f       /* mask for all the type bits */
+
+/*
+ * Format for namelist values.
+ */
+#define  N_FORMAT      "%06o"
+
+#endif
+
 struct symbol {
 	char *name;
 	unsigned int offset;	
@@ -90,6 +139,7 @@ struct symbol {
 	int index;
 	unsigned char type;	/* N_ type */
 	unsigned char found;	/* 0 unreferenced, 1 defined */
+	unsigned char seg;
 	struct symbol *next;
 };
 int sym_index=0;
@@ -588,6 +638,7 @@ use:
 				errs++;
 				fprintf(stderr, "%d: label '%s' declared twice\n", line, sp->name);
 			}
+			sp->seg = seg;
 			sp->type &= ~N_TYPE;
 			switch (seg) {
 			case 0: sp->type |= N_TEXT; sp->offset = text_size; break;
@@ -971,7 +1022,7 @@ yylex()
 		for (;;) {
 			c = fgetc(fin);
 			if (c == '"') {
-				char *cp = malloc(ind+1);
+				char *cp = (char *)malloc(ind+1);
 				v[ind++] = 0;
 				if (cp)
 					strcpy(cp, &v[0]);
@@ -992,7 +1043,7 @@ yylex()
 				}
 			}
 			if (ind >= (sizeof(v)-1)) {
-				char * cp = malloc(1);
+				char * cp = (char *)malloc(1);
 				*cp = 0;
 				yyerror("string too long");
 				string = cp;
@@ -1156,10 +1207,14 @@ char **argv;
 	struct reloc *rp;
 	struct num_ref *np;
 	char *in_name = 0;
+	unsigned char use_std=0;
 	char *out_name = "a.out";
 
 	yydebug = 0;
 	for (i = 1; i < argc; i++) {	
+		if (strcmp(argv[i], "--") == 0) {
+			use_std = 1;
+		} else
 		if (strcmp(argv[i], "-y") == 0) {
 			yydebug = 1;
 		} else
@@ -1194,10 +1249,15 @@ char **argv;
 	}
 
 	if (!in_name) {
-		fprintf(stderr, "No file specified\n");
-		return 1;
+		if (!use_std) {
+			fprintf(stderr, "No file specified\n");
+			return 1;
+		}
+		fin = stdin;
+		in_name = ".stdin";
+	} else {
+		fin = fopen(in_name, "r");
 	}
-	fin = fopen(in_name, "r");
 	if (!fin) {
 		fprintf(stderr, "Can't open '%s'\n", in_name);
 		return 1;
@@ -1350,38 +1410,13 @@ notdef:
 			}
 		} else 
 		if (aout) {
-#ifdef NOTDEF
 			FILE *fout = fopen(out_name, "wb");
 			if (fout) {
-#ifdef NOTDEF
-struct	exec {
-		int	      a_magic;	    /* magic number */
-		unsigned int  a_text;	    /* size of text segment */
-		unsigned int  a_data;	    /* size of initialized data	*/
-		unsigned int  a_bss;	    /* size of uninitialized data */
-		unsigned int  a_syms;	    /* size of symbol table */
-		unsigned int  a_entry;	    /* entry point */
-		unsigned int  a_unused;	    /* not used	*/
-		unsigned int  a_flag;	    /* relocation info stripped	*/
-}
-struct	nlist {
-#ifdef	_AOUT_INCLUDE_
-	union {
-	      char *n_name;/* In memory	address	of symbol name */
-	      off_t n_strx;/* String table offset (file) */
-	} n_un;
-#else
-	char	      *n_name;	 /* symbol name	(in memory) */
-#endif
-	u_char	      n_type;	 /* Type of symbol - see below */
-	char	      n_ovly;	 /* Overlay number */
-	u_int	      n_value;	 /* Symbol value */
-};
-#endif
 				struct exec e;
 				struct nlist n;
 				struct symbol *sp;
-				int string_offset;
+				unsigned long string_offset;
+				long symb_start;
 
 				for (sp=list, i = 1; i <= sym_count; i++, sp=sp->next) 
 					sp->toffset = i;
@@ -1389,7 +1424,7 @@ struct	nlist {
 				e.a_text = text_size;
 				e.a_data = data_size;
 				e.a_bss = bss_size;
-				e.a_syms = sym_count+1;
+				e.a_syms = 8*(sym_count+1);
 				e.a_entry = 0;
 				e.a_unused = 0;
 				e.a_flag = reloc_first?0:1;
@@ -1403,6 +1438,7 @@ outerr:
 				if (text_size && fwrite(text, text_size, 1, fout) != 1) goto outerr;
 				
 				if (data_size && fwrite(data, data_size, 1, fout) != 1) goto outerr;
+printf("text reloc = %lx\n", ftell(fout));
 				if (reloc_first) {
 					struct reloc *rp = reloc_first;
 					unsigned short s;
@@ -1415,33 +1451,36 @@ outerr:
 							if (rp->index == sp->index) {
 								switch (rp->type) {
 								case 1: /* .word v */
-									if (sp->type == (REXT|UNDF)) {
+									if (sp->type == (N_EXT|N_UNDF)) {
 										s = MAKE_REL(sp->toffset, REL_A, REL_EXTERN); 
 									} else {
 										switch (sp->seg) {
 										case 0: s = MAKE_REL(0, REL_A, REL_TEXT); break;
 										case 1: s = MAKE_REL(0, REL_A, REL_DATA); break;
 										case 2: s = MAKE_REL(0, REL_A, REL_BSS); break;
+										}
 									}
 									break;
 								case 4:	/* la r, addr */
-									if (sp->type == (REXT|UNDF)) {
+									if (sp->type == (N_EXT|N_UNDF)) {
 										s = MAKE_REL(sp->toffset, REL_B, REL_EXTERN); 
 									} else {
 										switch (sp->seg) {
 										case 0: s = MAKE_REL(0, REL_B, REL_TEXT); break;
 										case 1: s = MAKE_REL(0, REL_B, REL_DATA); break;
 										case 2: s = MAKE_REL(0, REL_B, REL_BSS); break;
+										}
 									}
 									break;
 								case 8:	/* jal li, addr */
-									if (sp->type == (REXT|UNDF)) {
+									if (sp->type == (N_EXT|N_UNDF)) {
 										s = MAKE_REL(sp->toffset, REL_C, REL_EXTERN); 
 									} else {
 										switch (sp->seg) {
 										case 0: s = MAKE_REL(0, REL_C, REL_TEXT); break;
 										case 1: s = MAKE_REL(0, REL_C, REL_DATA); break;
 										case 2: s = MAKE_REL(0, REL_C, REL_BSS); break;
+										}
 									}
 								}
 								break;
@@ -1460,33 +1499,36 @@ outerr:
 							if (rp->index == sp->index) {
 								switch (rp->type) {
 								case 1: /* .word v */
-									if (sp->type == (REXT|UNDF)) {
+									if (sp->type == (N_EXT|N_UNDF)) {
 										s = MAKE_REL(sp->toffset, REL_A, REL_EXTERN); 
 									} else {
 										switch (sp->seg) {
 										case 0: s = MAKE_REL(0, REL_A, REL_TEXT); break;
 										case 1: s = MAKE_REL(0, REL_A, REL_DATA); break;
 										case 2: s = MAKE_REL(0, REL_A, REL_BSS); break;
+										}
 									}
 									break;
 								case 4:	/* la r, addr */
-									if (sp->type == (REXT|UNDF)) {
+									if (sp->type == (N_EXT|N_UNDF)) {
 										s = MAKE_REL(sp->toffset, REL_B, REL_EXTERN); 
 									} else {
 										switch (sp->seg) {
 										case 0: s = MAKE_REL(0, REL_B, REL_TEXT); break;
 										case 1: s = MAKE_REL(0, REL_B, REL_DATA); break;
 										case 2: s = MAKE_REL(0, REL_B, REL_BSS); break;
+										}
 									}
 									break;
 								case 8:	/* jal li, addr */
-									if (sp->type == (REXT|UNDF)) {
+									if (sp->type == (N_EXT|N_UNDF)) {
 										s = MAKE_REL(sp->toffset, REL_C, REL_EXTERN); 
 									} else {
 										switch (sp->seg) {
 										case 0: s = MAKE_REL(0, REL_C, REL_TEXT); break;
 										case 1: s = MAKE_REL(0, REL_C, REL_DATA); break;
 										case 2: s = MAKE_REL(0, REL_C, REL_BSS); break;
+										}
 									}
 								}
 							}
@@ -1494,21 +1536,30 @@ outerr:
 						}
 						if (fwrite(&s, 2, 1, fout) != 1) goto outerr;
 					}
-				}	
+				}
 				fflush(fout);
-				fseek(fout, (sym_count+1)*sizeof(n), 1);
+printf("text reloc end = %lx\n", ftell(fout));
+				symb_start = ftell(fout);
+				fseek(fout, ((long)sym_count+1)*sizeof(n), 1);
+printf("string start = %lx\n", ftell(fout));
 				string_offset = 0;
+				if (fwrite(&string_offset, 4, 1, fout) != 1) goto outerr;
+				string_offset = 4;
 				i = strlen(in_name)+1;
 				if (fwrite(in_name, i, 1, fout) != 1) goto outerr;
 				string_offset += i;
 				for (sp=list, i = 1; i <= sym_count; i++, sp=sp->next) {
 					int l = strlen(sp->name)+1;
-					sp->soffset = string_offset;
+					sp->soffset = i;
 					string_offset += l;
 					if (fwrite(sp->name, l, 1, fout) != 1) goto outerr;
 				}
 				fflush(fout);
-				fseek(fout, -(sym_count+1)*sizeof(n), 1);
+printf("string end = %lx offset=%lx\n", ftell(fout), string_offset);
+				fseek(fout, symb_start+((long)sym_count+1)*sizeof(n), 0);
+				if (fwrite(&string_offset, 4, 1, fout) != 1) goto outerr;
+				fseek(fout, symb_start, 0);
+printf("symb start = %lx\n", ftell(fout));
 				
 				n.n_un.n_strx = 0;	/* file name */
 				n.n_type = N_FN;
@@ -1536,7 +1587,6 @@ outerr:
 				fprintf(stderr, "Can't open output file '%s'\n", out_name);
 				errs++;
 			}
-#endif
 		} else {
 			fprintf(stderr, "no output\n");
 			errs++;
