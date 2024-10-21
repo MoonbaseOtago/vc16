@@ -191,7 +191,6 @@ int yyval;
 int line=1;
 int errs=0;
 int bit32=0;
-int sym_count;
 
 void declare_label(/*int type, int ind*/);
 void emit(/*unsigned int ins*/);
@@ -1241,7 +1240,6 @@ yylex()
 		sp->type = N_UNDF;
 		list = sp;
 		yylval = sp->index;
-		sym_count++;
 		return t_name;
 	} else {
 		if (c == '<') {
@@ -1527,14 +1525,15 @@ notdef:
 				struct symbol *sp;
 				unsigned long string_offset;
 				long symb_start;
-
-				for (sp=list, i = 1; i <= sym_count; i++, sp=sp->next) 
-					sp->toffset = i;
+				int nsym = 0;
+				for (sp=list; sp; sp=sp->next) 
+				if (sp->type&N_EXT)
+					sp->toffset = ++nsym;
 				e.a_magic = 0;
 				e.a_text = text_size;
 				e.a_data = data_size;
 				e.a_bss = bss_size;
-				e.a_syms = 8*(sym_count+1);
+				e.a_syms = 8*(nsym+1);
 				e.a_entry = 0;
 				e.a_unused = 0;
 				e.a_flag = reloc_first?0:1;
@@ -1650,7 +1649,7 @@ printf("text reloc = %lx\n", ftell(fout));
 				fflush(fout);
 printf("text reloc end = %lx\n", ftell(fout));
 				symb_start = ftell(fout);
-				fseek(fout, ((long)sym_count+1)*sizeof(n), 1);
+				fseek(fout, ((long)nsym+1)*sizeof(n), 1);
 printf("string start = %lx\n", ftell(fout));
 				string_offset = 0;
 				if (fwrite(&string_offset, 4, 1, fout) != 1) goto outerr;
@@ -1658,15 +1657,17 @@ printf("string start = %lx\n", ftell(fout));
 				i = strlen(in_name)+1;
 				if (fwrite(in_name, i, 1, fout) != 1) goto outerr;
 				string_offset += i;
-				for (sp=list, i = 1; i <= sym_count; i++, sp=sp->next) {
+				for (sp=list, i = 1; sp; sp=sp->next) 
+				if (sp->type&N_EXT) {
 					int l = strlen(sp->name)+1;
 					sp->soffset = i;
 					string_offset += l;
 					if (fwrite(sp->name, l, 1, fout) != 1) goto outerr;
+					i++;
 				}
 				fflush(fout);
 printf("string end = %lx offset=%lx\n", ftell(fout), string_offset);
-				fseek(fout, symb_start+((long)sym_count+1)*sizeof(n), 0);
+				fseek(fout, symb_start+((long)nsym+1)*sizeof(n), 0);
 				if (fwrite(&string_offset, 4, 1, fout) != 1) goto outerr;
 				fseek(fout, symb_start, 0);
 printf("symb start = %lx\n", ftell(fout));
@@ -1676,7 +1677,8 @@ printf("symb start = %lx\n", ftell(fout));
 				n.n_ovly = 0;
 				n.n_value = 0;
 				if (fwrite(&n, sizeof(n), 1, fout) != 1) goto outerr;
-				for (sp=list, i = 1; i <= sym_count; i++, sp=sp->next) {
+				for (sp=list; sp; sp=sp->next) 
+				if (sp->type&N_EXT) {
 					n.n_un.n_strx = sp->soffset;
 					if (sp->found) {
 						n.n_type = sp->type;
