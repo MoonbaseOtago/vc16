@@ -185,6 +185,7 @@ unsigned int data_size = 0;
 unsigned int bss_size = 0;
 unsigned char seg=0;
 unsigned char aout=1;
+unsigned char first, last, changed;
 
 int yyval;
 int line=1;
@@ -204,6 +205,9 @@ void set_extern(/*int ind*/);
 void set_global(/* int */);
 void align();
 int is_global(/* int */);
+int is_short_branch(/* int label */);
+int is_short_jump(/* int label */);
+
 
 int
 shift_exp(r)
@@ -476,9 +480,13 @@ static struct tab reserved[] = {
 	"align", t_align,
 	"and", t_and,
 	"beqz", t_beqz,
+	"beqzs", t_beqzs,
 	"bgez", t_bgez,
+	"bgezs", t_bgezs,
 	"bltz", t_bltz,
+	"bltzs", t_bltzs,
 	"bnez", t_bnez,
+	"bnezs", t_bnezs,
 	"bss", t_bss,
 	"byte", t_byte,
 	"csr", t_csr,
@@ -497,7 +505,9 @@ static struct tab reserved[] = {
 	"jal", t_jal,
 	"jalfar", t_jalfar,
 	"jalr", t_jalr,
+	"jals", t_jals,
 	"jr", t_jr,
+	"js", t_js,
  	"la", t_la,
 	"lb", t_lb,
 	"ldio", t_ldio,
@@ -558,6 +568,53 @@ int ind;
 	return 0;
 }
 
+int
+is_short_branch( ind)
+int ind;
+{
+	struct symbol *sp;
+	if (first)
+		return 0;
+	sp = find_symbol(ind);
+	if (sp) {
+		int delta;
+
+		if (sp->type&N_UNDF)
+			return 0;
+		delta =  sp->offset - (seg?data_size:text_size);
+		if (delta < -(1<<6) || delta >= (1<<6)) {
+			return 0;
+		} else {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+int
+is_short_jump( ind)
+int ind;
+{
+	struct symbol *sp;
+	if (first)
+		return 0;
+	sp = find_symbol(ind);
+	if (sp) {
+		int delta;
+
+		if (sp->type&N_UNDF)
+			return 0;
+		delta =  sp->offset - (seg?data_size:text_size);
+		if (delta < -(1<<10) || delta >= (1<<10)) {
+			return 0;
+		} else {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+
 
 void
 declare_label(type, ind)
@@ -573,6 +630,7 @@ int type, ind;
 use:
 			sp->offset = (seg?data_size:text_size);
 			sp->seg = seg;
+			if (last)
 			for (rp = num_ref_first; rp;) {
 				if (rp->ind == ind) {
 					unsigned offset;
@@ -596,6 +654,7 @@ use:
 								errs++;
 								fprintf(stderr, "%d: '%df' jmp too far\n", rp->line, ind);
 							} else {
+								if (last)
 								cp[rp->offset>>1] |=  (((delta>>1)&7)<<3) | (((delta>>4)&1)<<11) | (((delta>>5)&1)<<2) | (((delta>>6)&1)<<7) | (((delta>>7)&1)<<6) | (((delta>>8)&3)<<9)| (((delta>>10)&1)<<8) | (((delta>>11)&1)<<12);
 							}
 						} else {
@@ -603,6 +662,7 @@ use:
 								errs++;
 								fprintf(stderr, "%d: '%df' branch too far\n", rp->line, ind);
 							} else {
+								if (last)
 								cp[rp->offset>>1] |= (((delta>>1)&3)<<3) | (((delta>>3)&3)<<10) | (((delta>>5)&1)<<2) | (((delta>>6)&3)<<5) | (((delta>>8)&1)<<12);
 							}
 						}
@@ -634,17 +694,23 @@ use:
 
 		sp = find_symbol(ind);
 		if (sp) {
-			if (sp->found) {
+			unsigned l;
+			if (sp->found && first) {
 				errs++;
 				fprintf(stderr, "%d: label '%s' declared twice\n", line, sp->name);
 			}
 			sp->seg = seg;
 			sp->type &= ~N_TYPE;
 			switch (seg) {
-			case 0: sp->type |= N_TEXT; sp->offset = text_size; break;
-			case 1: sp->type |= N_DATA; sp->offset = data_size; break;
-			case 2: sp->type |= N_BSS; sp->offset = bss_size; break;
+			case 0: sp->type |= N_TEXT; l = text_size; break;
+			case 1: sp->type |= N_DATA; l = data_size; break;
+			case 2: sp->type |= N_BSS; l = bss_size; break;
 			}
+			if (!first && sp->offset != l) {
+				//fprintf(stderr, "changed '%s' 0x%x->0x%x\n", sp->name, sp->offset, l);
+				changed = 1;
+			}
+			sp->offset = l;
 			sp->found = 1;
 			return;
 		}
@@ -708,6 +774,8 @@ int ind, type, offset;
 {
 	struct reloc *rp;
 
+	if (!last)
+		return 0;
 	if (type == 6 || type == 7) {
 		if (ind < 0) {
 			struct num_label *np;
@@ -851,9 +919,11 @@ unsigned int datav;
 			return;
 		}
 		if (word) {
-			text[text_size>>1] = datav;
+			if(last)
+				text[text_size>>1] = datav;
 			text_size += 2;
 		} else {
+			if (last)
 			if (text_size&1) {
 				text[text_size>>1] |= (datav&0xff)<<8;
 			} else {
@@ -873,9 +943,11 @@ unsigned int datav;
 			return;
 		}
 		if (word) {
-			data[data_size>>1] = datav;
+			if (last)
+				data[data_size>>1] = datav;
 			data_size += 2;
 		} else {
+			if (last)
 			if (data_size&1) {
 				data[data_size>>1] |= (datav&0xff)<<8;
 			} else {
@@ -916,7 +988,8 @@ unsigned int ins;
 			}
 			return;
 		}
-		text[text_size>>1] = ins;
+		if (last)
+			text[text_size>>1] = ins;
 		text_size += 2;
 		break;
 	case 1:	if (data_size >= (sizeof(data))) {
@@ -927,7 +1000,8 @@ unsigned int ins;
 			}
 			return;
 		}
-		data[data_size>>1] = ins;
+		if (last)
+			data[data_size>>1] = ins;
 		data_size += 2;
 		break;
 	default:fprintf(stderr, "%d: non-0 data writted to bss\n", line-1);
@@ -964,7 +1038,7 @@ unsigned int offset;
 }
 
 FILE *fin;
-int eof=0;
+unsigned char eof=0;
 
 void
 yyerror(err)
@@ -1209,6 +1283,7 @@ char **argv;
 	char *in_name = 0;
 	unsigned char use_std=0;
 	char *out_name = "a.out";
+	int pass;
 
 	yydebug = 0;
 	for (i = 1; i < argc; i++) {	
@@ -1262,19 +1337,56 @@ char **argv;
 		fprintf(stderr, "Can't open '%s'\n", in_name);
 		return 1;
 	}
-	if (yyparse()) {
-		return 1;
+	first = 1;
+	last = 0;
+	for (pass=0;;pass++) {
+//fprintf(stderr, "first=%d\n", first);
+		if (pass > 200) {
+			errs++;
+			fprintf(stderr, "Too many relaxation passes quitting\n");
+			break;
+		}
+		text_size = 0;
+		data_size = 0;
+		bss_size = 0;
+		seg = 0;
+		changed = 0;
+		line = 1;
+		if (yyparse()) {
+			return 1;
+		}
+//fprintf(stderr, "changed=%d\n", changed);
+		if (first) {
+			for (np = num_ref_first; np; np = np->next) {
+				errs++;
+				fprintf(stderr, "%d: '%df' not defined\n", np->line, np->ind);
+			}
+			if (errs)
+				break;
+			first = 0;
+		} else
+		if (!changed) {
+			line = 1;
+			last = 1;
+			changed = 0;
+//fprintf(stderr, "last=%d\n", last);
+			rewind(fin);
+			eof = 0;
+			if (yyparse()) {
+				return 1;
+			}
+			if (text_size&1)
+				text_size++;
+			if (data_size&1)
+				data_size++;
+			if (bss_size&1)
+				bss_size++;
+			break;
+		}
+		rewind(fin);
+		eof = 0;
 	}
-	if (text_size&1)
-		text_size++;
-	if (data_size&1)
-		data_size++;
-	if (bss_size&1)
-		bss_size++;
-	for (np = num_ref_first; np; np = np->next) {
-		errs++;
-		fprintf(stderr, "%d: '%df' not defined\n", np->line, np->ind);
-	}
+		
 	for (rp = reloc_first; rp; rp = rp->next) {
 		struct symbol *sp;
 		int found = 0;
@@ -1314,8 +1426,6 @@ notdef:
 				}
 				break;
 			case 3:	/* branch */
-				if (sp->type == (N_EXT|N_UNDF))
-					goto notdef;
 				delta = sp->offset-rp->offset;
 				if (delta < -(1<<6) || delta >= (1<<6)) {
 					errs++;
