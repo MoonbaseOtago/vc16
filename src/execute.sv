@@ -356,7 +356,11 @@ module execute(input clk, input reset,
 			c_mult = {r_wb, r_mult[RV-1:0]};
 		end else
 		if (r_wb_valid && set_cc) begin
-			c_mult = {{(RV-1){1'b0}}, added[RV]};
+			if (op == `OP_SUB) begin
+				c_mult = {(RV){added[RV]}};
+			end else begin
+				c_mult = {{(RV-1){1'b0}}, added[RV]};
+			end
 		end else
 		case ({r_mult_running|start_mult, r_div_running|start_div})
 		2'b10: c_mult = ((start_mult ? {2*RV{1'b0}} : {r_mult[2*RV-2:0], 1'b0}) + (r1[c_mult_off]?{{RV{1'b0}},r2}:{2*RV{1'b0}}));
