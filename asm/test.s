@@ -1078,6 +1078,40 @@ far:	jalfar	fred
 farx:	jal     sendx
 
 
+	// addc
+	li	a0, 0x7fff
+	li	a1, 0x7fff
+	addc	a0, a1
+	jal	sendx	// 0xfe
+	li	a0, 0
+	add	a0, mulhi
+	jal	sendx	// 0x00
+
+	li	a0, 0x8000
+	li	a1, 0x8000
+	addc	a0, a1
+	jal	sendx	// 0x00
+	li	a0, 0
+	add	a0, mulhi
+	jal	sendx	// 0x01
+
+	li	a0, 0x0002
+	li	a1, 0x0001
+	subc	a0, a1
+	jal	sendx	// 0x01
+	li	a0, 0
+	add	a0, mulhi
+	jal	sendx	// 0x00
+
+	li	a0, 0x0001
+	li	a1, 0x0002
+	subc	a0, a1
+	jal	sendx	// 0xff
+	li	a0, 0
+	add	a0, mulhi
+	jal	sendx	// 0xff
+
+
 	j	fail
 	
 

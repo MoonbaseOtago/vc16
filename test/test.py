@@ -19,7 +19,8 @@ outputs = [ 0x41, 0x42, 0x49, 0x99, 0xcc, 0xcc, 0x99, 0x55, 0x55, 0x00,
 	    1,    0,    0x92, 0xff, 0xf9, 0xff, 0,    0,    0xff, 0xff,
 	    0x23, 1,    0x23, 1,    3,    0x8e, 1,    0,    7,    8, 
 	    9,    8,    0,    6,    4,    229,  0x85, 0x5a, 0x23, 0x9a,
-	    0x53, 0x55, 0x76, 2,    3,    4,    5,    123, 
+	    0x53, 0x55, 0x76, 2,    3,    4,    5,    123,  0xfe, 0,
+	    0,    1,    1,    0,    0xff, 0xff,
 0xffaa]
 
 @cocotb.test()
@@ -38,7 +39,7 @@ async def test_vc_cpu(dut):
     dut.rst_n.value = 1
 
     # check all values
-    for i in range(168):
+    for i in range(176):
         dut._log.info("check output {}".format(i))
         dut._log.info("expected value {}".format(outputs[i]))
         while 1 :

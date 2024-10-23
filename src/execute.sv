@@ -309,10 +309,14 @@ module execute(input clk, input reset,
 	endgenerate
 
 	wire [RV:0]added = {1'b0,r1} + {1'b0, r2};
+	wire [RV:0]subbed = {1'b0,r1} - {1'b0, r2};
 	reg [RV-1:0]r_wb, c_wb;
 	reg [3:0]r_wb_addr;
 	reg r_ie;
 	reg r_wb_valid;
+	reg r_set_cc;
+	reg r_cc;
+	wire c_cc = op==`OP_SUB?subbed[RV]:added[RV];
 
 	always @(*)
 `ifdef MULT
@@ -322,7 +326,7 @@ module execute(input clk, input reset,
 `endif
 	case (op) // synthesis full_case parallel_case
 	`OP_ADD:	c_wb = added[RV-1:0];
-	`OP_SUB:	c_wb = r1 - r2;
+	`OP_SUB:	c_wb = subbed[RV-1:0];
 	`OP_XOR:	c_wb = r1 ^ r2;
 	`OP_OR:		c_wb = r1 | r2;
 	`OP_AND:	c_wb = r1 & r2;
@@ -355,11 +359,11 @@ module execute(input clk, input reset,
 		if (r_wb_valid && r_wb_addr == 4'b0111) begin
 			c_mult = {r_wb, r_mult[RV-1:0]};
 		end else
-		if (r_wb_valid && set_cc) begin
+		if (r_wb_valid && r_set_cc) begin
 			if (op == `OP_SUB) begin
-				c_mult = {(RV){added[RV]}};
+				c_mult = {{(RV){r_cc}}, r_mult[RV-1:0]};
 			end else begin
-				c_mult = {{(RV-1){1'b0}}, added[RV]};
+				c_mult = {{{(RV-1){1'b0}}, r_cc}, r_mult[RV-1:0]};
 			end
 		end else
 		case ({r_mult_running|start_mult, r_div_running|start_div})
@@ -402,12 +406,16 @@ module execute(input clk, input reset,
 	if (!reset && ((valid && !(swapsp && prev_supmode) && !((br|jmp)&!link) && !r_read_stall && !mult_stall) || mdone || (mmu_fault&r_fetch))) begin
 		r_wb_swapsp <= swapsp;
 		r_wb_valid <= !(load&!r_read_stall || store);
+		r_set_cc <= set_cc;
+		r_cc <= c_cc;
 		r_wb_addr <= (reset ?0 : (sys_trap||(interrupt&r_ie)||(mmu_fault&r_fetch)) ? 3 : store? 0 : rd);
 		r_wb <= sys_trap||(interrupt&r_ie)||(mmu_fault&r_fetch)?{r_pc, supmode}: link ? {pc_plus_1, supmode}: c_wb;
 		r_wdata <= (cond[0]? {(RV/8){r2reg[7:0]}}:r2reg);
 	end else
 	if (r_read_stall && rdone) begin
 		r_wb_valid <= 1;
+		r_set_cc <= set_cc;
+		r_cc <= c_cc;
 		r_wb <= (cond[0] ?{{(RV-8){rdata[7]}}, rdata[7:0]}:rdata);
 	end else begin
 		r_wb_valid <= 0;
