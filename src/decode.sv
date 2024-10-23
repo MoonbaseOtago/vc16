@@ -35,6 +35,7 @@ module decode(input clk, input reset,
 		output do_flush_all, 
 		output do_flush_write, 
 		output do_inv_mmu, 
+		output set_cc, 
 `ifdef MULT
 		output mult,
 		output div,
@@ -73,6 +74,7 @@ module decode(input clk, input reset,
 	reg		r_flush_all, c_flush_all; assign do_flush_all = r_flush_all;
 	reg		r_flush_write, c_flush_write; assign do_flush_write = r_flush_write;
 	reg		r_inv_mmu, c_inv_mmu; assign do_inv_mmu = r_inv_mmu;
+	reg		r_set_cc, c_set_cc; assign set_cc = r_set_cc;
 
 	always @(*) begin
 		c_flush_all = 0;
@@ -94,6 +96,7 @@ module decode(input clk, input reset,
 		c_swapsp = 0; 
 		c_rs2_pc = 0;
 		c_inv_mmu = 0;
+		c_set_cc = 0;
 `ifdef MULT
 		c_mult = 0;
 		c_div = 0;
@@ -224,6 +227,8 @@ module decode(input clk, input reset,
 								3'b0_01:	c_op = `OP_XOR;
 								3'b0_10:	c_op = `OP_OR;
 								3'b0_11:	c_op = `OP_AND;
+								3'b1_00:	begin c_op = `OP_SUB; c_set_cc = 1; end
+								3'b1_01:	begin c_op = `OP_ADD; c_set_cc = 1; end
 								default: c_trap = 1;
 								endcase
 							   end
@@ -490,6 +495,7 @@ module decode(input clk, input reset,
 		r_flush_all <= c_flush_all;
 		r_flush_write <= c_flush_write;
 		r_inv_mmu <= c_inv_mmu;
+		r_set_cc <= c_set_cc;
 	end
 
 

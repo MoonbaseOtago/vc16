@@ -53,6 +53,7 @@ module execute(input clk, input reset,
 		output		    fault,
 		input			do_inv_mmu,
 		output	   [3:0]inv_mmu,
+		input			set_cc,
 		input			do_flush_all,
 		input			do_flush_write,
 		output			i_flush_all,
@@ -307,11 +308,12 @@ module execute(input clk, input reset,
 		end
 	endgenerate
 
-	wire [RV-1:0]added = r1 + r2;
+	wire [RV:0]added = {1'b0,r1} + {1'b0, r2};
 	reg [RV-1:0]r_wb, c_wb;
 	reg [3:0]r_wb_addr;
 	reg r_ie;
 	reg r_wb_valid;
+
 	always @(*)
 `ifdef MULT
 	if (mdone) begin
@@ -319,7 +321,7 @@ module execute(input clk, input reset,
 	end else
 `endif
 	case (op) // synthesis full_case parallel_case
-	`OP_ADD:	c_wb = added;
+	`OP_ADD:	c_wb = added[RV-1:0];
 	`OP_SUB:	c_wb = r1 - r2;
 	`OP_XOR:	c_wb = r1 ^ r2;
 	`OP_OR:		c_wb = r1 | r2;
@@ -345,12 +347,16 @@ module execute(input clk, input reset,
 	reg [RV-1:0]t1;
 	reg [RV:0]t2;
 
+
 	always @(*) begin
 		t1 = {RV{1'bx}};
 		t2 = {RV+1{1'bx}};
 		c_mult_off = (start_mult||start_div)?~0:r_mult_off-1;
 		if (r_wb_valid && r_wb_addr == 4'b0111) begin
 			c_mult = {r_wb, r_mult[RV-1:0]};
+		end else
+		if (r_wb_valid && set_cc) begin
+			c_mult = {{(RV-1){1'b0}}, added[RV]};
 		end else
 		case ({r_mult_running|start_mult, r_div_running|start_div})
 		2'b10: c_mult = ((start_mult ? {2*RV{1'b0}} : {r_mult[2*RV-2:0], 1'b0}) + (r1[c_mult_off]?{{RV{1'b0}},r2}:{2*RV{1'b0}}));
