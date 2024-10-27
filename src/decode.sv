@@ -44,6 +44,7 @@ module decode(input clk, input reset,
 		output [3:0]rs1, output[3:0]rs2, output [3:0]rd,
 		output needs_rs2, 
 		output rs2_pc, 
+		output rs2_inv, 
 		output [RV-1:0]imm);
 
 	parameter RV=32;	// register width
@@ -66,6 +67,7 @@ module decode(input clk, input reset,
 	reg[3:0]r_rd, c_rd; assign rd = r_rd;
 	reg		r_needs_rs2, c_needs_rs2; assign needs_rs2 = r_needs_rs2;
 	reg		r_rs2_pc, c_rs2_pc; assign rs2_pc = r_rs2_pc;
+	reg		r_rs2_inv, c_rs2_inv; assign rs2_inv = r_rs2_inv;
 	reg[RV-1:0]r_imm, c_imm; assign imm = r_imm;
 `ifdef MULT
 	reg		r_mult, c_mult; assign mult = r_mult;
@@ -95,6 +97,7 @@ module decode(input clk, input reset,
 		c_sys_call = 0;
 		c_swapsp = 0; 
 		c_rs2_pc = 0;
+		c_rs2_inv = 0;
 		c_inv_mmu = 0;
 		c_set_cc = 0;
 `ifdef MULT
@@ -139,7 +142,7 @@ module decode(input clk, input reset,
 							c_imm = {{(RV-5){1'b0}},         ins[11:10],ins[6], ins[12], ins[5]};
 						end
 					end
-			3'b100:	begin	// jalr   x(li)
+			3'b100:	begin	// jalr   x(lr)
 						c_br = 1;
 						c_cond = 3'b1x1;
 						c_op = `OP_ADD;
@@ -416,7 +419,7 @@ module decode(input clk, input reset,
 			3'b011:
 					begin				// lui ** - note inverted extension
 						c_op = `OP_ADD;
-						c_rd = ins[10:7];	// allows li
+						c_rd = ins[10:7];	// allows lr
 						c_rs1 = 0;
 						c_imm = {{(RV-15){~ins[11]}}, ins[11],  ins[12], ins[6:2],8'b0};
 						c_trap = !supmode && (c_rd >= 4'b0011 && c_rd <= 4'b0110);
@@ -438,9 +441,13 @@ module decode(input clk, input reset,
 								3'b0_10:	c_op = `OP_ADDB;
 								3'b0_11:	c_op = `OP_ADDBU;
 								3'b1_00:	c_op = `OP_SWAP; // swap 
-								3'b1_01:	begin c_op = `OP_ADD; c_rs2_pc = 1; c_rs2 = 4'bx; end	// addpc
-								3'b1_10:	begin c_op = `OP_ADDB; c_rs2 = 0; end	// sext
-								3'b1_11:	begin c_op = `OP_ADDBU; c_rs2 = 0; end	// zext
+								3'b1_01:	case (ins[4:2])
+											3'b000: begin c_op = `OP_ADD; c_rs2_pc = 1; c_rs2 = 4'bx; end	// addpc								
+											3'b001: begin c_op = `OP_ADDB; c_rs2 = 0; end   // sext
+											3'b010: begin c_op = `OP_ADDBU; c_rs2 = 0; end   // zext
+											3'b011: begin c_op = `OP_XOR; c_rs2 = 0; c_rs2_inv = 1; end   // inv
+											default:	c_trap = 1;
+											endcase
 								default:	c_trap = 1;
 								endcase
 							   end
@@ -479,6 +486,7 @@ module decode(input clk, input reset,
 		r_rs2 <= c_rs2;
 		r_needs_rs2 <= c_needs_rs2;
 		r_rs2_pc <= c_rs2_pc;
+		r_rs2_inv <= c_rs2_inv;
 		r_rd <= c_rd;
 		r_imm <= c_imm;
 		r_store <= c_store;

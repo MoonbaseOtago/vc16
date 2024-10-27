@@ -156,6 +156,7 @@ module vc(input clk, input reset,
 	wire   [3:0]rs1, rs2, rd;
 	wire		needs_rs2; 
 	wire		rs2_pc;
+	wire		rs2_inv;
 	wire [RV-1:0]imm;
 
 	wire [VA-1:1]pc;
@@ -215,6 +216,7 @@ module vc(input clk, input reset,
 		.rd(rd),
 		.needs_rs2(needs_rs2), 
 		.rs2_pc(rs2_pc), 
+		.rs2_inv(rs2_inv), 
 		.imm(imm));
 
 	execute #(.VA(VA), .RV(RV), .NMMU(NMMU), .MMU(MMU))ex(.clk(clk), .reset(reset),
@@ -269,6 +271,7 @@ module vc(input clk, input reset,
 		.rd(rd),
 		.needs_rs2(needs_rs2), 
 		.rs2_pc(rs2_pc), 
+		.rs2_inv(rs2_inv), 
 		.imm(imm));
 
 	

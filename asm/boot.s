@@ -16,15 +16,15 @@
 
 .=0	
 begin:
-	j	start
+	js	start
 	.=4	
-	j	trap
+	js	trap
 	.=8
-	j 	trap
+	js 	trap
 	.=12
-	j	trap
+	js	trap
 	.=16
-	j	trap
+	js	trap
 	// leave room here for fast mmu trap handler
 	.= 64
 entry:	// code must be duplicated here at offset 64

@@ -1,14 +1,14 @@
 .=0	
 begin:
-	j	start
+	js	start
 	.=4	
-	j	trap
+	js	trap
 	.=8
-	j 	intr
+	js 	intr
 	.=12
-	j	sys_trap
+	js	sys_trap
 	.=16
-	j	mmu_trap
+	js	mmu_trap
 mmu_vector:
 	.word	fail
 int_vector:
@@ -817,7 +817,7 @@ ll1:		ldio	a0, 4(a5)
 	or 	a2, 1
 	li	a3, 3
 ww:	mv 	csr, a2		// 
-wf:	li	a3, 2		// int should happen here - this instruction should never colplete
+wf:	li	a3, 2		// int should happen here - this instruction should never complete
 	j	fail
 int1:	bnez	a0, oo1
 	add	a0, 1
@@ -1110,6 +1110,10 @@ farx:	jal     sendx
 	li	a0, 0
 	add	a0, mulhi
 	jal	sendx	// 0xff
+
+	li	a0, 0x55
+	inv	a0
+	jal	sendx	// 0xaa
 
 
 	j	fail

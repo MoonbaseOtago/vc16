@@ -1,4 +1,4 @@
-%token t_la t_lr t_value t_sp t_epc t_csr t_s0 t_s1 t_a0 t_a1 t_a2 t_a3 t_a4 t_a5 t_and t_or t_xor t_sub t_add t_mv t_nop t_inv t_ebreak t_jalr t_jr t_lw t_lb t_sw t_sb t_lea t_lui t_li t_beqz t_bnez t_bltz t_bgez t_j t_jal t_sll t_srl t_sra t_word t_name t_nl t_mul t_mulhi t_mmu t_addb t_addbu t_syscall t_stmp t_swapsp t_shl t_shr t_zext t_sext t_ldio t_stio t_flush t_dcache t_icache t_ret t_swap t_addpc t_div t_invmmu t_text t_data t_bss t_byte t_extern t_space t_num_label t_global t_string t_stringv t_align t_r0 t_r1 t_r2 t_r3 t_r4 t_r5 t_r6 t_r7 t_x0 t_jalfar t_js t_jals t_bgezs t_bltzs t_beqzs t_bnezs t_addc t_subc
+%token t_la t_lr t_value t_sp t_epc t_csr t_s0 t_s1 t_a0 t_a1 t_a2 t_a3 t_a4 t_a5 t_and t_or t_xor t_sub t_add t_mv t_nop t_inv t_ebreak t_jalr t_jr t_lw t_lb t_sw t_sb t_lea t_lui t_li t_beqz t_bnez t_bltz t_bgez t_j t_jal t_sll t_srl t_sra t_word t_name t_nl t_mul t_mulhi t_mmu t_addb t_addbu t_syscall t_stmp t_swapsp t_shl t_shr t_zext t_sext t_ldio t_stio t_flush t_dcache t_icache t_ret t_swap t_addpc t_div t_invmmu t_text t_data t_bss t_byte t_extern t_space t_num_label t_global t_string t_stringv t_align t_r0 t_r1 t_r2 t_r3 t_r4 t_r5 t_r6 t_r7 t_x0 t_jalfar t_js t_jals t_bgezs t_bltzs t_beqzs t_bnezs t_addc t_subc t_blez t_bgtz 
 %start  program
 %%
 
@@ -69,8 +69,9 @@ ins:		t_and  rm ',' rm 	{ $$ = 0x8c61|($2<<7)|($4<<2); }
 	|	t_addbu  rm ',' rm      { $$ = 0x8c63|($2<<7)|($4<<2); } 
 	|	t_swap  rm ',' rm      	{ $$ = 0x9c03|($2<<7)|($4<<2); } 
 	|	t_addpc  rm      	{ $$ = 0x9c23|($2<<7); } 
-	|	t_sext  rm      	{ $$ = 0x9c43|($2<<7); } 
-	|	t_zext  rm      	{ $$ = 0x9c63|($2<<7); } 
+	|	t_sext  rm      	{ $$ = 0x9c27|($2<<7); } 
+	|	t_zext  rm      	{ $$ = 0x9c2b|($2<<7); } 
+	|	t_inv  rm      		{ $$ = 0x9c2f|($2<<7); } 
 	|	t_xor  rm ',' rm        { $$ = 0x8c21|($2<<7)|($4<<2); } 
 	|	t_sub  rm ',' rm        { $$ = 0x8c01|($2<<7)|($4<<2); } 
 	|	t_subc  rm ',' rm        { $$ = 0x9c01|($2<<7)|($4<<2); } 
@@ -164,6 +165,30 @@ ins:		t_and  rm ',' rm 	{ $$ = 0x8c61|($2<<7)|($4<<2); }
 						$$ = 0x8000;	      /* jalr X(lr) */
 					}}
 	|	t_bgez	rm ',' t_name	{if (is_short_branch($4)) {$$ = 0xc003 | ($2<<7); ref_label($4, 3, 0); } else {
+						emit(0xe003 | ($2<<7)| (2<<3));
+						ref_label($4, 8, 0);
+						emit(0x6001|(1<<7));  /* li lr, X */
+						$$ = 0x8000;	      /* jalr X(lr) */
+					}}
+	|	t_bgtz	rm ',' t_name	{if (is_short_branch($4)) {ref_label($4, 3, 0); emit(0xe001 | ($2<<7)); } else {
+						emit(0xc001 | ($2<<7)| (2<<3));
+						ref_label($4, 8, 0);
+						emit(0x6001|(1<<7));  /* li lr, X */
+						$$ = 0x8000;	      /* jalr X(lr) */
+					 }
+					 if (is_short_branch($4)) {$$ = 0xe003 | ($2<<7); ref_label($4, 3, 0); } else {
+						emit(0xc003 | ($2<<7)| (2<<3));
+						ref_label($4, 8, 0);
+						emit(0x6001|(1<<7));  /* li lr, X */
+						$$ = 0x8000;	      /* jalr X(lr) */
+					}}
+	|	t_blez	rm ',' t_name	{if (is_short_branch($4)) {ref_label($4, 3, 0); emit(0xc001 | ($2<<7)); } else {
+						emit(0xe001 | ($2<<7)| (2<<3));
+						ref_label($4, 8, 0);
+						emit(0x6001|(1<<7));  /* li lr, X */
+						$$ = 0x8000;	      /* jalr X(lr) */
+					 }
+					 if (is_short_branch($4)) {$$ = 0xc003 | ($2<<7); ref_label($4, 3, 0); } else {
 						emit(0xe003 | ($2<<7)| (2<<3));
 						ref_label($4, 8, 0);
 						emit(0x6001|(1<<7));  /* li lr, X */

@@ -483,6 +483,8 @@ static struct tab reserved[] = {
 	"beqzs", t_beqzs,
 	"bgez", t_bgez,
 	"bgezs", t_bgezs,
+	"bgtz", t_bgtz,
+	"blez", t_blez,
 	"bltz", t_bltz,
 	"bltzs", t_bltzs,
 	"bnez", t_bnez,

@@ -48,12 +48,12 @@ cccc - constant (details vary to make decoding easy)
 000c cccc cccd dd00 - add	rd, sp, ccccccc0
 001c ccss sccd dd00 - lw	rd, ccccc0(rs)
 010c ccss sccd dd00 - lb	rd, ccccc(rs)
-100c cccc cccc cc00 - jal	li, ccccccccccc0(li)
+100c cccc cccc cc00 - jal	lr, ccccccccccc0(lr)
 110c ccss scc2 2200 - sw	rs, ccccc0(rs2)
 111c ccss scc2 2200 - sb	rs, ccccc(rs2)
 
 000c ccdd dccc cc01 - add	rd, cccccccc
-001c ccdd dccc cc01 - jal	li, cccccccc0(pc)
+001c ccdd dccc cc01 - jal	lr, cccccccc0(pc)
 010c ccdd dccc cc01 - li	rd, cccccccc
 011c crrr rccc cc01 - addi2sp	sp, sp, ccccccc0 (rr == 2)
 		      lui	rr, ccccccc000000000 (rr!=2)
@@ -66,6 +66,8 @@ cccc - constant (details vary to make decoding easy)
 1000 11dd d01s ss01 - xor	rd, rd, rs
 1000 11dd d10s ss01 - or	rd, rd, rs
 1000 11dd d11s ss01 - and	rd, rd, rs
+1001 11dd d00s ss01 - subc	rd, rd, rs	add/sub with carry 	0/1
+1001 11dd d01s ss01 - addc	rd, rd, rs	carry goes to mulhi	0/-1
 101c cccc cccc cc01 - j		ccccccccccc0(pc)
 110c ccss sccc cc01 - beqz	rs, ccccccc0(pc)
 111c ccss sccc cc01 - bnez	rs, ccccccc0(pc)
@@ -76,7 +78,7 @@ cccc - constant (details vary to make decoding easy)
 011c crrr rccc cc10 - lb	rr, ccccccc(sp)
 1000 xRRR R000 0010 - jr	(RR)   (jr (epc) is return from exception)
 1000 xrrr r0RR RR10 - mv	rr, RR
-1001 xRRR R000 0010 - jalr	li, (RR)   
+1001 xRRR R000 0010 - jalr	lr, (RR)   
 1001 xrrr r0RR RR10 - add	rr, RR
 110c cRRR Rccc cc10 - sw	RR, ccccccc0(sp)
 111c cRRR Rccc cc10 - sb	RR, ccccccc(sp)
@@ -94,14 +96,31 @@ cccc - constant (details vary to make decoding easy)
 1000 11dd d01s ss11 - div	rd, rd, rs		(remainder in multhi)
 1000 11dd d10s ss11 - addb	rd, rd, rs		
 1000 11dd d11s ss11 - addbu	rd, rd, rs		
-1001 11dd d01s ss11 - add	rd, rd, pc
-1001 11dd d10s ss11 - sext	rd	
-1001 11dd d11s ss11 - zext	rd
+1001 11dd d000 0011 - add	rd, rd, pc
+1001 11dd d000 0111 - sext	rd	
+1001 11dd d000 1011 - zext	rd
+1001 11dd d000 1111 - inv	rd
 1010 00ss s000 0011 - flushw    (rs) *		flush write cache to mem
 110c ccss sccc cc11 - bltz	rs, ccccccc0(pc)
 111c ccss sccc cc11 - bgez	rs, ccccccc0(pc)
 
 Instructions marked '*' trap when executed in user mode
+
+The assembler creates some pseudo instructions to allow arbitrary distance branches and calls (that will
+survive the linker) as well as the missing branches - some of these instructions may use the link (lr)
+register as a temporary (there are 's' varients to some of them that will not do that and force the use of
+the underlying instructions):
+
+* j (js)
+* jal (jals)
+* beqz (beqzs)
+* bnez (bnezs)
+* bgez (bgezs)
+* bltz (bltzs)
+* blez 
+* bgtz 
+
+The assembler runs relaxation passes to reduce the size of branches as much as possible
 
 
 ## Kernel mode

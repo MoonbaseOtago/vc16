@@ -23,6 +23,7 @@ module execute(input clk, input reset,
 		input [3:0]rs2, 
 		input needs_rs2,
 		input rs2_pc,
+		input rs2_inv,
 		input [RV-1:0]imm,
 		input	load,
 		input	store,
@@ -176,10 +177,11 @@ module execute(input clk, input reset,
 	end
 
 	always @(*) 
-	casez ({rs2_pc, needs_rs2})
-	2'b1?: r2 = {r_pc, 1'b0};
-	2'b00: r2 = imm;
-	2'b01: r2 = r2reg;
+	casez ({rs2_inv, rs2_pc, needs_rs2})  // synthesis full_case
+	3'b1??: r2 = {RV{1'b1}};
+	3'b?1?: r2 = {r_pc, 1'b0};
+	3'b000: r2 = imm;
+	3'b001: r2 = r2reg;
 	endcase
 	
 	always @(*) 
