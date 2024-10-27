@@ -523,6 +523,7 @@ static struct tab reserved[] = {
 	"mul", t_mul,
 	"mulhi", t_mulhi,
 	"mv", t_mv,
+	"neg", t_neg,
 	"nop", t_nop,
 	"or", t_or,
 	"r0", t_r0,

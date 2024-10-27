@@ -446,6 +446,7 @@ module decode(input clk, input reset,
 											3'b001: begin c_op = `OP_ADDB; c_rs2 = 0; end   // sext
 											3'b010: begin c_op = `OP_ADDBU; c_rs2 = 0; end   // zext
 											3'b011: begin c_op = `OP_XOR; c_rs2 = 0; c_rs2_inv = 1; end   // inv
+											3'b100: begin c_op = `OP_SUB; c_rs1 = 0; c_rs2 =  {1'b1, ins[9:7]}; end   // neg
 											default:	c_trap = 1;
 											endcase
 								default:	c_trap = 1;

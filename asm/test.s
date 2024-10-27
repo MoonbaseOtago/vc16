@@ -1116,6 +1116,11 @@ farx:	jal     sendx
 	jal	sendx	// 0xaa
 
 
+	li	a0, -66
+	neg	a0
+	jal	sendx	// 66
+
+
 	j	fail
 	
 
