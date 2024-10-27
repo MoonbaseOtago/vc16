@@ -178,10 +178,11 @@ module execute(input clk, input reset,
 
 	always @(*) 
 	casez ({rs2_inv, rs2_pc, needs_rs2})  // synthesis full_case parallel_case
-	3'b1??: r2 = {RV{1'b1}};
-	3'b?1?: r2 = {r_pc, 1'b0};
+	3'b10?: r2 = {RV{1'b1}};
+	3'b01?: r2 = {r_pc, 1'b0};
 	3'b000: r2 = imm;
 	3'b001: r2 = r2reg;
+	default: r2 = {RV{1'bx}};
 	endcase
 	
 	always @(*) 
