@@ -202,10 +202,11 @@ void set_offset(/*int type, unsigned int offset*/);
 unsigned ref_label(/*int ind, int type, int offset*/);
 void set_extern(/*int ind*/);
 void set_global(/* int */);
-void align();
+void align(/* int */);
 int is_global(/* int */);
 int is_short_branch(/* int label */);
 int is_short_jump(/* int label */);
+void set_file();
 
 
 int
@@ -278,14 +279,14 @@ int v;
 		return 0;
 	}
 	if (bit32) {
-		if (v < 0 || v >= (1<<7)) {
+		if (v < -(1<<6) || v >= (1<<6)) {
 			errs++;
 			fprintf(stderr, "%d: invalid offset (must be >=0 <128)\n", line);
 			return 0;
 		}
 		return ( (((v>>6)&1)<<5) |  (((v>>2)&1)<<6) | (((v>>3)&7)<<10));
 	} else {
-		if (v < 0 || v >= (1<<6)) {
+		if (v < -(1<<5) || v >= (1<<5)) {
 			errs++;
 			fprintf(stderr, "%d: invalid offset (must be >=0 <64)\n", line);
 			return 0;
@@ -314,7 +315,7 @@ int
 roff(v)
 int v;
 {
-	if (v < 0 || v >= (1<<5)) {
+	if (v < -(1<<4) || v >= (1<<4)) {
 		errs++;
 		fprintf(stderr, "%d: invalid offset (must be >=0 <32)\n", line);
 		return 0;
@@ -335,14 +336,14 @@ int v;
 		return 0;
 	}
 	if (bit32) {
-		if (v < 0 || v >= (1<<9)) {
+		if (v < -(1<<8) || v >= (1<<8)) {
 			errs++;
 			fprintf(stderr, "%d: invalid offset (must be >=0 <512)\n", line);
 			return 0;
 		}
 		v >>= 2;
 	} else {
-		if (v < 0 || v >= (1<<8)) {
+		if (v < -(1<<7) || v >= (1<<7)) {
 			errs++;
 			fprintf(stderr, "%d: invalid offset (must be >=0 <256)\n", line);
 			return 0;
@@ -355,7 +356,7 @@ int v;
 int off(v)
 int v;
 {
-	if (v < 0 || v >= (1<<7)) {
+	if (v < -(1<<6) || v >= (1<<6)) {
 		errs++;
 		fprintf(stderr, "%d: invalid offset (must be >=0 <128)\n", line);
 		return 0;
@@ -498,9 +499,11 @@ static struct tab reserved[] = {
 	"ebreak", t_ebreak,
 	"epc", t_epc,
 	"extern", t_extern,
+	"file", t_file,
 	"flush", t_flush,
 	"global", t_global,
 	"icache", t_icache,
+	"ident", t_ident,
 	"inv", t_inv,
 	"invmmu", t_invmmu,
 	"j", t_j,
@@ -539,6 +542,7 @@ static struct tab reserved[] = {
 	"s1", t_s1,
 	"sb", t_sb,
 	"sext", t_sext,
+	"size", t_size,
 	"sll", t_sll,
 	"sp", t_sp,
 	"space", t_space,
@@ -583,7 +587,7 @@ int ind;
 	if (sp) {
 		int delta;
 
-		if (sp->type&N_UNDF)
+		if ((sp->type&N_TYPE) == N_UNDF)
 			return 0;
 		delta =  sp->offset - (seg?data_size:text_size);
 		if (delta < -(1<<6) || delta >= (1<<6)) {
@@ -606,7 +610,7 @@ int ind;
 	if (sp) {
 		int delta;
 
-		if (sp->type&N_UNDF)
+		if ((sp->type&N_TYPE) == N_UNDF)
 			return 0;
 		delta =  sp->offset - (seg?data_size:text_size);
 		if (delta < -(1<<10) || delta >= (1<<10)) {
@@ -867,12 +871,27 @@ int s;
 	seg = s;
 }
 
-void align()
+void align(v)
+int v;
 {
+	int a;
 	switch (seg) {
-	case 0: if (text_size&1) text_size++; break;
-	case 1: if (data_size&1) data_size++; break;
-	case 2: if (bss_size&1) bss_size++; break;
+	case 0: a = text_size; break;
+	case 1: a = data_size; break;
+	case 2: a = bss_size; break;
+	}
+	switch (v) {
+	case 1:break;
+	case 2:if (a&1) a++; break;
+	case 4:if (a&3) a=(a+3)&~3; break;
+	case 8:if (a&7) a=(a+7)&~7; break;
+	case 16:if (a&15) a=(a+15)&~15; break;
+	default: fprintf(stderr, "%d: invalid .align %d\n", line-1, v);break;
+	}
+	switch (seg) {
+	case 0: a = text_size=a; break;
+	case 1: a = data_size=a; break;
+	case 2: a = bss_size=a; break;
 	}
 }
 
@@ -976,6 +995,16 @@ emit_string()
 		emit_data(0, *cp++);
 	emit_data(0, 0);
 	free(string);
+	string = 0;
+}
+static char *filename=0;
+void set_file()
+{
+	if (!string)
+		return;
+	if (filename)
+		free(filename);
+	filename = string;
 	string = 0;
 }
 
@@ -1283,7 +1312,6 @@ char **argv;
 	int i, bin_out=0,hex_out=0,src_out=0,dump_symbols=0;
 	struct reloc *rp;
 	struct num_ref *np;
-	char *in_name = 0;
 	unsigned char use_std=0;
 	char *out_name = "a.out";
 	int pass;
@@ -1318,26 +1346,26 @@ char **argv;
 			i++;
 			out_name = argv[i];
 		} else {
-			if (in_name) {
+			if (filename) {
 				fprintf(stderr, "too many inout files\n");
 				errs++;
 			}
-			in_name = argv[i];
+			filename = strdup(argv[i]);
 		}
 	}
 
-	if (!in_name) {
+	if (!filename) {
 		if (!use_std) {
 			fprintf(stderr, "No file specified\n");
 			return 1;
 		}
 		fin = stdin;
-		in_name = ".stdin";
+		filename = ".stdin";
 	} else {
-		fin = fopen(in_name, "r");
+		fin = fopen(filename, "r");
 	}
 	if (!fin) {
-		fprintf(stderr, "Can't open '%s'\n", in_name);
+		fprintf(stderr, "Can't open '%s'\n", filename);
 		return 1;
 	}
 	first = 1;
@@ -1552,7 +1580,7 @@ outerr:
 				if (text_size && fwrite(text, text_size, 1, fout) != 1) goto outerr;
 				
 				if (data_size && fwrite(data, data_size, 1, fout) != 1) goto outerr;
-printf("text reloc = %lx\n", ftell(fout));
+//printf("text reloc = %lx\n", ftell(fout));
 				if (reloc_first) {
 					struct reloc *rp = reloc_first;
 					unsigned short s;
@@ -1652,15 +1680,15 @@ printf("text reloc = %lx\n", ftell(fout));
 					}
 				}
 				fflush(fout);
-printf("text reloc end = %lx\n", ftell(fout));
+//printf("text reloc end = %lx\n", ftell(fout));
 				symb_start = ftell(fout);
 				fseek(fout, ((long)nsym+1)*sizeof(n), 1);
-printf("string start = %lx\n", ftell(fout));
+//printf("string start = %lx\n", ftell(fout));
 				string_offset = 0;
 				if (fwrite(&string_offset, 4, 1, fout) != 1) goto outerr;
 				string_offset = 4;
-				i = strlen(in_name)+1;
-				if (fwrite(in_name, i, 1, fout) != 1) goto outerr;
+				i = strlen(filename)+1;
+				if (fwrite(filename, i, 1, fout) != 1) goto outerr;
 				string_offset += i;
 				for (sp=list, i = 1; sp; sp=sp->next) 
 				if (sp->type&N_EXT) {
@@ -1671,11 +1699,11 @@ printf("string start = %lx\n", ftell(fout));
 					i++;
 				}
 				fflush(fout);
-printf("string end = %lx offset=%lx\n", ftell(fout), string_offset);
+//printf("string end = %lx offset=%lx\n", ftell(fout), string_offset);
 				fseek(fout, symb_start+((long)nsym+1)*sizeof(n), 0);
 				if (fwrite(&string_offset, 4, 1, fout) != 1) goto outerr;
 				fseek(fout, symb_start, 0);
-printf("symb start = %lx\n", ftell(fout));
+//printf("symb start = %lx\n", ftell(fout));
 				
 				n.n_un.n_strx = 0;	/* file name */
 				n.n_type = N_FN;

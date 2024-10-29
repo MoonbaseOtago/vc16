@@ -125,9 +125,9 @@ module decode(input clk, input reset,
 						c_rd = {1'b1, ins[4:2]};
 						c_rs1 = {1'b1, ins[9:7]};
 						if (RV==16) begin
-							c_imm = {{(RV-6){1'b0}}, ins[5], ins[12:10],ins[6], 1'b0};
+							c_imm = {{(RV-6){ins[5]}}, ins[5], ins[12:10],ins[6], 1'b0};
 						end else begin
-							c_imm = {{(RV-7){1'b0}}, ins[5], ins[12:10],ins[6], 2'b0};
+							c_imm = {{(RV-7){ins[5]}}, ins[5], ins[12:10],ins[6], 2'b0};
 						end
 				    end
 			3'b011: begin 	// lb
@@ -137,9 +137,9 @@ module decode(input clk, input reset,
 						c_rd = {1'b1, ins[4:2]};
 						c_rs1 = {1'b1, ins[9:7]};
 						if (RV==16) begin
-							c_imm = {{(RV-5){1'b0}},         ins[12:10],ins[6], ins[5]};
+							c_imm = {{(RV-5){ins[12]}},         ins[12:10],ins[6], ins[5]};
 						end else begin
-							c_imm = {{(RV-5){1'b0}},         ins[11:10],ins[6], ins[12], ins[5]};
+							c_imm = {{(RV-5){ins[12]}},         ins[11:10],ins[6], ins[12], ins[5]};
 						end
 					end
 			3'b100:	begin	// jalr   x(lr)
@@ -158,9 +158,9 @@ module decode(input clk, input reset,
 						c_rs2 = {1'b1, ins[4:2]};
 						c_rs1 = {1'b1, ins[9:7]};
 						if (RV==16) begin
-							c_imm = {{(RV-6){1'b0}}, ins[5], ins[12:10],ins[6], 1'b0};
+							c_imm = {{(RV-6){ins[5]}}, ins[5], ins[12:10],ins[6], 1'b0};
 						end else begin
-							c_imm = {{(RV-7){1'b0}}, ins[5], ins[12:10],ins[6], 2'b0};
+							c_imm = {{(RV-7){ins[5]}}, ins[5], ins[12:10],ins[6], 2'b0};
 						end
 					end
 			3'b111: begin 	// sb
@@ -170,9 +170,9 @@ module decode(input clk, input reset,
 						c_rs2 = {1'b1, ins[4:2]};
 						c_rs1 = {1'b1, ins[9:7]};
 						if (RV==16) begin
-							c_imm = {{(RV-5){1'b0}},         ins[12:10],ins[6], ins[5]};
+							c_imm = {{(RV-5){ins[12]}},         ins[12:10],ins[6], ins[5]};
 						end else begin
-							c_imm = {{(RV-5){1'b0}},         ins[11:10],ins[6], ins[12], ins[5]};
+							c_imm = {{(RV-5){ins[12]}},         ins[11:10],ins[6], ins[12], ins[5]};
 						end
 					end
 			default: c_trap = 1;
@@ -277,9 +277,9 @@ module decode(input clk, input reset,
 						c_rd = ins[10:7];
 						c_rs1 = 2;
 						if (RV == 16) begin
-							c_imm = {{(RV-8){1'b0}}, ins[4:2], ins[12:11], ins[5],ins[6], 1'b0};
+							c_imm = {{(RV-8){ins[4]}}, ins[4:2], ins[12:11], ins[5],ins[6], 1'b0};
 						end else begin
-							c_imm = {{(RV-9){1'b0}}, ins[4:2], ins[12:11], ins[5],ins[6], 2'b0};
+							c_imm = {{(RV-9){ins[4]}}, ins[4:2], ins[12:11], ins[5],ins[6], 2'b0};
 						end
 						c_trap = !supmode && (c_rd >= 4'b0011 && c_rd <= 4'b0110);
 					end
@@ -290,9 +290,9 @@ module decode(input clk, input reset,
 						c_rd = ins[10:7];
 						c_rs1 = 2;
 						if (RV == 16) begin
-							c_imm = {{(RV-7){1'b0}},          ins[3:2], ins[12:11],ins[5], ins[6], ins[4]};
+							c_imm = {{(RV-7){ins[3]}},          ins[3:2], ins[12:11],ins[5], ins[6], ins[4]};
 						end else begin
-							c_imm = {{(RV-7){1'b0}},          ins[2],   ins[12],ins[6:4], ins[11], ins[3]};
+							c_imm = {{(RV-7){ins[2]}},          ins[2],   ins[12],ins[6:4], ins[11], ins[3]};
 						end
 						c_trap = !supmode && (c_rd >= 4'b0011 && c_rd <= 4'b0110);
 					end
@@ -340,9 +340,9 @@ module decode(input clk, input reset,
 						c_op = `OP_ADD;
 						c_rs1 = 2;
 						if (RV == 16) begin
-							c_imm = {{(RV-8){1'b0}}, ins[4:2], ins[12:11], ins[5],ins[6], 1'b0};
+							c_imm = {{(RV-8){ins[4]}}, ins[4:2], ins[12:11], ins[5],ins[6], 1'b0};
 						end else begin
-							c_imm = {{(RV-9){1'b0}}, ins[4:2], ins[12:11], ins[5],ins[6], 2'b0};
+							c_imm = {{(RV-9){ins[4]}}, ins[4:2], ins[12:11], ins[5],ins[6], 2'b0};
 						end
 						c_trap = !supmode && (c_rs2 >= 4'b0011 && c_rs2 <= 4'b0110);
 					end
@@ -353,9 +353,9 @@ module decode(input clk, input reset,
 						c_rs1 = 2;
 						c_op = `OP_ADD;
 						if (RV == 16) begin
-							c_imm = {{(RV-7){1'b0}},          ins[3:2], ins[12:11],ins[5], ins[6], ins[4]};
+							c_imm = {{(RV-7){ins[3]}},          ins[3:2], ins[12:11],ins[5], ins[6], ins[4]};
 						end else begin
-							c_imm = {{(RV-7){1'b0}},          ins[2],   ins[12],ins[6:4], ins[11], ins[3]};
+							c_imm = {{(RV-7){ins[2]}},          ins[2],   ins[12],ins[6:4], ins[11], ins[3]};
 						end
 						c_trap = !supmode && (c_rs2 >= 4'b0011 && c_rs2 <= 4'b0110);
 					end
