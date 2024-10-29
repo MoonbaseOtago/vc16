@@ -336,14 +336,14 @@ int v;
 		return 0;
 	}
 	if (bit32) {
-		if (v < -(1<<8) || v >= (1<<8)) {
+		if (v < 0 || v >= (1<<9)) {
 			errs++;
 			fprintf(stderr, "%d: invalid offset (must be >=0 <512)\n", line);
 			return 0;
 		}
 		v >>= 2;
 	} else {
-		if (v < -(1<<7) || v >= (1<<7)) {
+		if (v < 0 || v >= (1<<8)) {
 			errs++;
 			fprintf(stderr, "%d: invalid offset (must be >=0 <256)\n", line);
 			return 0;
@@ -356,7 +356,7 @@ int v;
 int off(v)
 int v;
 {
-	if (v < -(1<<6) || v >= (1<<6)) {
+	if (v < 0 || v >= (1<<7)) {
 		errs++;
 		fprintf(stderr, "%d: invalid offset (must be >=0 <128)\n", line);
 		return 0;
