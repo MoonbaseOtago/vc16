@@ -270,6 +270,31 @@ int v, l;
 	return(((v&0x3)<<5) | (((v>>2)&7)<<10)| (((v>>5)&7)<<2));
 }
 
+int roffX7(v)
+int v;
+{
+	if (bit32?v&3:v&1) {
+		errs++;
+		fprintf(stderr, "%d: invalid offset (must be word aligned)\n", line);
+		return 0;
+	}
+	if (bit32) {
+		if (v < -(1<<9) || v >= (1<<9)) {
+			errs++;
+			fprintf(stderr, "%d: invalid offset (must be >=-512 <512)\n", line);
+			return 0;
+		}
+		return ( (((v>>6)&1)<<5) |  (((v>>2)&1)<<6) | (((v>>3)&7)<<10)| (((v>>7)&7)<<7));
+	} else {
+		if (v < -(1<<8) || v >= (1<<8)) {
+			errs++;
+			fprintf(stderr, "%d: invalid offset (must be >=-256 <256)\n", line);
+			return 0;
+		}
+		return ( (((v>>5)&1)<<5)  | (((v>>1)&1)<<6) | (((v>>2)&7)<<10) | (((v>>6)&7)<<7) );
+	}	
+}
+
 int roffX(v)
 int v;
 {
@@ -281,14 +306,14 @@ int v;
 	if (bit32) {
 		if (v < -(1<<6) || v >= (1<<6)) {
 			errs++;
-			fprintf(stderr, "%d: invalid offset (must be >=0 <128)\n", line);
+			fprintf(stderr, "%d: invalid offset (must be >=-64 <64)\n", line);
 			return 0;
 		}
 		return ( (((v>>6)&1)<<5) |  (((v>>2)&1)<<6) | (((v>>3)&7)<<10));
 	} else {
 		if (v < -(1<<5) || v >= (1<<5)) {
 			errs++;
-			fprintf(stderr, "%d: invalid offset (must be >=0 <64)\n", line);
+			fprintf(stderr, "%d: invalid offset (must be >=-32 <32)\n", line);
 			return 0;
 		}
 		return ( (((v>>5)&1)<<5)  | (((v>>1)&1)<<6) | (((v>>2)&7)<<10));
@@ -305,7 +330,7 @@ int v;
 	}
 	if (v < 0 || v >= (1<<4)) {
 		errs++;
-		fprintf(stderr, "%d: invalid offset (must be >=0 <16)\n", line);
+		fprintf(stderr, "%d: invalid offset (must be >=-8 <8)\n", line);
 		return 0;
 	}
 	return ( (((v>>1)&1)<<6) | (((v>>2)&3)<<10));
