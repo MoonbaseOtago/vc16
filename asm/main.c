@@ -295,6 +295,17 @@ int v;
 	}	
 }
 
+int roff7(v)
+int v;
+{
+	if (v < -(1<<8) || v >= (1<<8)) {
+		errs++;
+		fprintf(stderr, "%d: invalid offset (must be >=-256 <256)\n", line);
+		return 0;
+	}
+	return ( (((v>>0)&1)<<6) |  (((v>>1)&7)<<10) | (((v>>5)&1)<<5)| (((v>>6)&7)<<7));
+}
+
 int roffX(v)
 int v;
 {

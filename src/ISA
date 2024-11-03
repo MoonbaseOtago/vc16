@@ -12,7 +12,7 @@ Most of the ISA operates on 8 GP registers, none are special in any way:
 	- 4 a2
 	- 5 a3
 	- 6 a4
-	- 7 a5
+	- 7 fp
 
 Some instructions operate on 16 registers:
 
@@ -32,7 +32,7 @@ Some instructions operate on 16 registers:
 	- 12 a2
 	- 13 a3
 	- 14 a4
-	- 15 a5
+	- 15 fp
 
 * - kernel mode only register - causes invalid instruction trap in user mode
 
@@ -46,11 +46,13 @@ RR - source register (one of the 16)
 cccc - constant (details vary to make decoding easy)
 
 000c cccc cccd dd00 - add	rd, sp, ccccccc0
-001c ccss sccd dd00 - lw	rd, ccccc0(rs)
-010c ccss sccd dd00 - lb	rd, ccccc(rs)
-100c cccc cccc cc00 - jal	lr, ccccccccccc0(lr)
-110c ccss scc2 2200 - sw	rs, ccccc0(rs2)
-111c ccss scc2 2200 - sb	rs, ccccc(rs2)
+0o1c cccc cccd dd00 - lw	rd, cccccccc0(fp)	addr sign extended
+010c ccss sccd dd00 - lw	rd, ccccc0(rs)		addr sign extended
+011c ccss sccd dd00 - lb	rd, ccccc(rs)		addr sign extended
+100c cccc cccc cc00 - jal	lr, ccccccccccc0(lr)	addr sign extended
+101c cccc ccc2 2200 - sw	r2, cccccccc0(fp)	addr sign extended
+110c ccss scc2 2200 - sw	rs, ccccc0(rs2)		addr sign extended
+111c ccss scc2 2200 - sb	rs, ccccc(rs2)		addr sign extended
 
 000c ccdd dccc cc01 - add	rd, cccccccc
 001c ccdd dccc cc01 - jal	lr, cccccccc0(pc)
@@ -74,14 +76,15 @@ cccc - constant (details vary to make decoding easy)
 
 0000 ccdd dxxc cc10 - sll	rd, cccc
 0001 xxdd dxxs ss10 - sll	rd, rs
-010c crrr rccc cc10 - lw	rr, ccccccc0(sp)
-011c crrr rccc cc10 - lb	rr, ccccccc(sp)
+010c crrr rccc cc10 - lw	rr, ccccccc0(sp)	addr 0 extended
+011c crrr rccc cc10 - lb	rr, ccccccc(sp)		addr 0 extended
 1000 xRRR R000 0010 - jr	(RR)   (jr (epc) is return from exception)
 1000 xrrr r0RR RR10 - mv	rr, RR
 1001 xRRR R000 0010 - jalr	lr, (RR)   
 1001 xrrr r0RR RR10 - add	rr, RR
-110c cRRR Rccc cc10 - sw	RR, ccccccc0(sp)
-111c cRRR Rccc cc10 - sb	RR, ccccccc(sp)
+101c cccc cccr rr10 - sb	rr, ccccccc(r7)		addr sign extended
+110c cRRR Rccc cc10 - sw	RR, ccccccc0(sp)	addr 0 extended
+111c cRRR Rccc cc10 - sb	RR, ccccccc(sp)		addr 0 extended
 
 0000 0000 0000 xx11 - trap	(invalid instructions   ....0111 is breakpoint)
 0000 0000 0001 0111 - syscall	
@@ -100,7 +103,9 @@ cccc - constant (details vary to make decoding easy)
 1001 11dd d000 0111 - sext	rd	
 1001 11dd d000 1011 - zext	rd
 1001 11dd d000 1111 - inv	rd
-1010 00ss s000 0011 - flushw    (rs) *		flush write cache to mem
+1001 11dd d001 0011 - neg	rd
+1001 11ss s001 1011 - flushw    (rs) *		flush write cache to mem
+101c cccc cccr rr11 - lb	rr, ccccccc(r7)		addr sign extended
 110c ccss sccc cc11 - bltz	rs, ccccccc0(pc)
 111c ccss sccc cc11 - bgez	rs, ccccccc0(pc)
 

@@ -109,7 +109,6 @@ module decode(input clk, input reset,
 			case (ins[15:13]) // synthesis full_case parallel_case
 			3'b000: begin	// addi4sp
 						c_op = `OP_ADD;
-						c_trap = ins[11:2]==0;
 						if (RV == 16) begin
 							c_imm = {{(RV-9){1'b0}}, ins[9:7],ins[5],ins[12:10],ins[6],1'b0};
 						end else begin
@@ -117,6 +116,7 @@ module decode(input clk, input reset,
 						end
 						c_rd = {1'b1, ins[4:2]};
 						c_rs1 = 2;
+						c_trap = ins[21:2]==0;	// 0 instruction is trap
 					end
 			3'b001: begin 	// lw7
 						c_load = 1;
@@ -124,11 +124,7 @@ module decode(input clk, input reset,
 						c_cond = 3'bxx0;
 						c_rd = {1'b1, ins[4:2]};
 						c_rs1 = {1'b1, 3'b111};
-						if (RV==16) begin
-							c_imm = {{(RV-9){ins[9]}}, ins[9:7], ins[5], ins[12:10],ins[6], 1'b0};
-						end else begin
-							c_imm = {{(RV-10){ins[9]}}, ins[9:7], ins[5], ins[12:10],ins[6], 2'b0};
-						end
+						c_imm = {{(RV-8){ins[9]}}, ins[9:7], ins[5], ins[12:10],ins[6]};
 				    end
 			3'b010: begin 	// lw
 						c_load = 1;
@@ -357,6 +353,18 @@ module decode(input clk, input reset,
 							c_trap = !supmode && ((c_rs2 >= 4'b0011 && c_rs2 <= 4'b0110) || (c_rs1 >= 4'b0011 && c_rs1 <= 4'b0110));
 						end
 					end
+			3'b101: begin 	// sb7
+						c_store = 1;
+						c_cond = 3'bxx1;
+						c_op = `OP_ADD;
+						c_rs2 = {1'b1, ins[4:2]};
+						c_rs1 = {1'b1, 3'b111};
+						if (RV==16) begin
+							c_imm = {{(RV-9){ins[9]}}, ins[9:7], ins[5], ins[12:10],ins[6], 1'b0};
+						end else begin
+							c_imm = {{(RV-10){ins[9]}}, ins[9:7], ins[5], ins[12:10],ins[6], 2'b0};
+						end
+					end
 			3'b110:	begin	// swsp  **
 						c_store = 1;
 						c_cond = 3'bxx0;
@@ -471,6 +479,16 @@ module decode(input clk, input reset,
 											3'b010: begin c_op = `OP_ADDBU; c_rs2 = 0; end   // zext
 											3'b011: begin c_op = `OP_XOR; c_rs2 = 0; c_rs2_inv = 1; end   // inv
 											3'b100: begin c_op = `OP_SUB; c_rs1 = 0; c_rs2 =  {1'b1, ins[9:7]}; end   // neg
+											3'b101: begin 	// flushw (reg)
+														c_store = 1;
+														c_flush_write = 1;
+														c_io = 0;
+														c_cond = 3'bxx0;
+														c_op = `OP_ADD;
+														c_rs2 = 0;
+														c_imm = 0;
+														c_trap = !supmode;
+													end
 											default:	c_trap = 1;
 											endcase
 								default:	c_trap = 1;
@@ -479,17 +497,14 @@ module decode(input clk, input reset,
 						default: c_trap = 1;
 						endcase
 					end
-			3'b101: begin 	// flushw (reg)
-						c_store = 1;
-						c_flush_write = 1;
-						c_io = 0;
-						c_cond = 3'bxx0;
+			3'b101: begin 	// lb7
+						c_load = 1;
 						c_op = `OP_ADD;
-						c_rs2 = 0;
-						c_rs1 = {1'b1, ins[9:7]};
-						c_imm = 0;
-						c_trap = !supmode ||  ins[12:10] != 0 || ins[6:2] != 0 ;// other encodings availa
-					end
+						c_cond = 3'bxx1;
+						c_rd = {1'b1, ins[4:2]};
+						c_rs1 = {1'b1, 3'b111};
+						c_imm = {{(RV-8){ins[9]}}, ins[9:7], ins[5], ins[12:10],ins[6]};
+				    end
 			3'b11?:	begin	//  bltz/bgez
 						c_br = 1;
 						c_cond = {2'b01, ins[13]};	// bltz/bgez
