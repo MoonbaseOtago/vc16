@@ -116,7 +116,7 @@ module decode(input clk, input reset,
 						end
 						c_rd = {1'b1, ins[4:2]};
 						c_rs1 = 2;
-						c_trap = ins[21:2]==0;	// 0 instruction is trap
+						c_trap = ins[12:2]==0;	// 0 instruction is trap
 					end
 			3'b001: begin 	// lw7
 						c_load = 1;
